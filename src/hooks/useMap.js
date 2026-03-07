@@ -2,9 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { MAP_STYLES, GPX_ROUTE_COLORS, ROUTING_MODES } from "../constants";
 import { nearestPointOnLine, getWaypointInsertIndex, getFilteredElevations, arePointsClose } from "../utils/geo";
+import { loadAppleMapKit } from "../utils/appleMapKit";
 
 const ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY;
+const APPLE_MAPKIT_TOKEN = import.meta.env.VITE_APPLE_MAPKIT_JS_TOKEN;
 const DEFAULT_CENTER = [25.2797, 54.6872];
+const TRANSPARENT_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: { "background-color": "rgba(0,0,0,0)", "background-opacity": 0 },
+    },
+  ],
+};
 
 // ---------- Layer helpers ----------
 
@@ -48,6 +61,15 @@ function addStravaLayer(map, geojson) {
 function removeLayerAndSource(map, layerId, sourceId) {
   if (map.getLayer(layerId)) map.removeLayer(layerId);
   if (sourceId && map.getSource(sourceId)) map.removeSource(sourceId);
+}
+
+function getBaseStyle(mapStyle, useAppleSatellite) {
+  if (mapStyle === "satellite" && useAppleSatellite) return TRANSPARENT_STYLE;
+  return MAP_STYLES[mapStyle]?.style || MAP_STYLES.streets.style;
+}
+
+function getBaseStyleKey(mapStyle, useAppleSatellite) {
+  return mapStyle === "satellite" && useAppleSatellite ? "satellite-apple-overlay" : mapStyle;
 }
 
 // ---------- Rainbow marker ----------
@@ -98,15 +120,18 @@ function calculateElevationGain(geojson) {
 
 // ---------- Hook ----------
 
-export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode }) {
+export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode }) {
   const mapRef = useRef(null);
+  const appleMapRef = useRef(null);
+  const appleMapKitRef = useRef(null);
+  const appleMapReadyRef = useRef(false);
   const waypointsRef = useRef([]);
   const markersRef = useRef([]);
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
   const userLocationRef = useRef(null);
   const userMarkerRef = useRef(null);
-  const currentMapStyleRef = useRef(mapStyle);
+  const currentMapStyleRef = useRef(getBaseStyleKey(mapStyle, false));
 
   // Mutable refs so stable callbacks always see the latest values
   const routingModeRef = useRef(routingMode);
@@ -121,6 +146,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
   const [locationState, setLocationState] = useState({ status: "idle", message: "Location off" });
   const [isRouting, setIsRouting] = useState(false);
   const [routingError, setRoutingError] = useState(null);
+  const [appleMapReady, setAppleMapReady] = useState(false);
 
   useEffect(() => { routingModeRef.current = routingMode; }, [routingMode]);
   useEffect(() => { importedGeoJsonRef.current = importedRoutesGeoJson; }, [importedRoutesGeoJson]);
@@ -136,6 +162,42 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
     let isCancelled = false;
     let map = null;
     let geolocateControl = null;
+    const setAppleBasemapVisibility = (visible) => {
+      if (!appleMapContainerRef?.current) return;
+      appleMapContainerRef.current.style.opacity = visible ? "1" : "0";
+    };
+    const syncAppleBasemapCamera = () => {
+      if (!map || !appleMapRef.current || !appleMapKitRef.current) return;
+      const center = map.getCenter();
+      const bounds = map.getBounds();
+      const latDelta = Math.max(Math.abs(bounds.getNorth() - bounds.getSouth()), 0.0005);
+      const lngDelta = Math.max(Math.abs(bounds.getEast() - bounds.getWest()), 0.0005);
+      appleMapRef.current.region = new appleMapKitRef.current.CoordinateRegion(
+        new appleMapKitRef.current.Coordinate(center.lat, center.lng),
+        new appleMapKitRef.current.CoordinateSpan(latDelta, lngDelta)
+      );
+    };
+    const ensureAppleBasemap = async () => {
+      if (!APPLE_MAPKIT_TOKEN || appleMapRef.current || !appleMapContainerRef?.current) return;
+      try {
+        const mapkit = await loadAppleMapKit(APPLE_MAPKIT_TOKEN);
+        if (isCancelled || !appleMapContainerRef.current) return;
+        appleMapKitRef.current = mapkit;
+        appleMapRef.current = new mapkit.Map(appleMapContainerRef.current, {
+          mapType: mapkit.Map.MapTypes.Satellite,
+          showsMapTypeControl: false,
+          showsZoomControl: false,
+        });
+        appleMapReadyRef.current = true;
+        setAppleMapReady(true);
+        syncAppleBasemapCamera();
+        setAppleBasemapVisibility(mapStyle === "satellite");
+      } catch (error) {
+        console.error("Apple MapKit JS failed to load:", error);
+        appleMapReadyRef.current = false;
+        setAppleMapReady(false);
+      }
+    };
     const ensureUserMarker = (coords) => {
       if (!map || !Array.isArray(coords)) return;
       if (!userMarkerRef.current) {
@@ -162,15 +224,17 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
     };
     const initMap = (center) => {
       if (isCancelled || !mapContainerRef.current) return;
+      const useAppleSatellite = mapStyle === "satellite" && appleMapReadyRef.current;
       map = new maplibregl.Map({
         container: mapContainerRef.current,
-        style: MAP_STYLES[mapStyle].style,
+        style: getBaseStyle(mapStyle, useAppleSatellite),
         center,
         zoom: 12,
         attributionControl: false,
       });
       mapRef.current = map;
-      currentMapStyleRef.current = mapStyle;
+      currentMapStyleRef.current = getBaseStyleKey(mapStyle, useAppleSatellite);
+      if (appleMapReadyRef.current) syncAppleBasemapCamera();
       if (Array.isArray(userLocationRef.current)) ensureUserMarker(userLocationRef.current);
 
       geolocateControl = new maplibregl.GeolocateControl({
@@ -329,6 +393,9 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
 
     // --- Map events ---
     map.on("load", () => {
+      map.on("move", syncAppleBasemapCamera);
+      map.on("zoom", syncAppleBasemapCamera);
+      map.on("resize", syncAppleBasemapCamera);
       addImportedLayer(map, importedGeoJsonRef.current);
       if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
 
@@ -392,6 +459,8 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
       initMap(DEFAULT_CENTER);
     }
 
+    ensureAppleBasemap();
+
     return () => {
       isCancelled = true;
       if (geolocateControl) {
@@ -404,6 +473,12 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
       }
+      if (appleMapRef.current) {
+        appleMapRef.current.destroy?.();
+        appleMapRef.current = null;
+      }
+      appleMapKitRef.current = null;
+      appleMapReadyRef.current = false;
       fns.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
@@ -414,21 +489,37 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
 
   // ---------- Map style changes ----------
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || currentMapStyleRef.current === mapStyle) return;
-    const nextStyle = MAP_STYLES[mapStyle]?.style;
-    if (!nextStyle) return;
+    if (appleMapContainerRef?.current) {
+      appleMapContainerRef.current.style.opacity = mapStyle === "satellite" && appleMapReady ? "1" : "0";
+    }
 
-    map.setStyle(nextStyle);
+    const map = mapRef.current;
+    if (!map) return;
+
+    const useAppleSatellite = mapStyle === "satellite" && appleMapReady;
+    const nextStyleKey = getBaseStyleKey(mapStyle, useAppleSatellite);
+    if (currentMapStyleRef.current === nextStyleKey) return;
+
+    map.setStyle(getBaseStyle(mapStyle, useAppleSatellite));
     map.once("styledata", () => {
-      currentMapStyleRef.current = mapStyle;
+      currentMapStyleRef.current = nextStyleKey;
+      if (useAppleSatellite && appleMapRef.current && appleMapKitRef.current) {
+        const center = map.getCenter();
+        const bounds = map.getBounds();
+        const latDelta = Math.max(Math.abs(bounds.getNorth() - bounds.getSouth()), 0.0005);
+        const lngDelta = Math.max(Math.abs(bounds.getEast() - bounds.getWest()), 0.0005);
+        appleMapRef.current.region = new appleMapKitRef.current.CoordinateRegion(
+          new appleMapKitRef.current.Coordinate(center.lat, center.lng),
+          new appleMapKitRef.current.CoordinateSpan(latDelta, lngDelta)
+        );
+      }
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
       const strava = stravaGeoJsonRef.current;
       if (strava?.features?.length) addStravaLayer(map, strava);
     });
-  }, [mapStyle]);
+  }, [appleMapContainerRef, mapStyle, appleMapReady]);
 
   // ---------- Imported routes ----------
   useEffect(() => {

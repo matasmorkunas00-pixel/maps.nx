@@ -8,26 +8,6 @@ export const ROUTING_MODES = {
   mainRoads: { label: "Main roads", profile: "driving-car", snapRadius: 25 },
 };
 
-const buildRasterStyle = ({ rasterTiles, labelTiles = [], maxzoom = 19 }) => ({
-  version: 8,
-  sources: {
-    basemap: {
-      type: "raster",
-      tiles: rasterTiles,
-      tileSize: 256,
-      maxzoom,
-      attribution: "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    },
-    ...(labelTiles.length
-      ? { labels: { type: "raster", tiles: labelTiles, tileSize: 256, maxzoom, attribution: "Labels © Esri" } }
-      : {}),
-  },
-  layers: [
-    { id: "basemap", type: "raster", source: "basemap" },
-    ...(labelTiles.length ? [{ id: "labels", type: "raster", source: "labels" }] : []),
-  ],
-});
-
 export const MAP_STYLES = {
   streets: {
     label: "Streets",
@@ -35,13 +15,6 @@ export const MAP_STYLES = {
   },
   satellite: {
     label: "Satellite",
-    style: buildRasterStyle({
-      rasterTiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      labelTiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      ],
-    }),
+    style: "https://api.maptiler.com/maps/satellite/style.json?key=Hyv4x1z1eacwc6D47Zsg",
   },
 };
