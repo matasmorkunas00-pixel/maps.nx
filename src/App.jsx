@@ -17,9 +17,11 @@ export default function App() {
   const [mapStyle, setMapStyle] = useState("streets");
   const [pressedButton, setPressedButton] = useState(null);
   const [importFolderName, setImportFolderName] = useState("");
-  const [visibleFolders, setVisibleFolders] = useState([]);
+  const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
+  const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
+  const [visibleStravaYears, setVisibleStravaYears] = useState(null);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
@@ -56,16 +58,17 @@ export default function App() {
     [importedRoutes]
   );
 
-  useEffect(() => {
-    setVisibleFolders((current) => {
-      const next = current.filter((f) => availableFolders.includes(f));
-      return next.length ? next : availableFolders;
-    });
-  }, [availableFolders]);
+  const activeVisibleFolders = useMemo(
+    () =>
+      visibleFolders === null
+        ? availableFolders
+        : visibleFolders.filter((folder) => availableFolders.includes(folder)),
+    [visibleFolders, availableFolders]
+  );
 
   const importedRoutesGeoJson = useMemo(
-    () => buildImportedRoutesGeoJson(importedRoutes, visibleFolders),
-    [importedRoutes, visibleFolders]
+    () => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders),
+    [importedRoutes, activeVisibleFolders]
   );
 
   const {
@@ -78,6 +81,92 @@ export default function App() {
     disconnect: stravaDisconnect,
     loadActivities: stravaLoadActivities,
   } = useStrava();
+
+  const stravaFeatures = useMemo(() => stravaActivitiesGeoJson?.features || [], [stravaActivitiesGeoJson]);
+
+  const availableStravaTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          stravaFeatures
+            .map((feature) => feature?.properties?.activityType)
+            .filter((value) => typeof value === "string" && value.trim())
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [stravaFeatures]
+  );
+
+  const availableStravaYears = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          stravaFeatures
+            .map((feature) => feature?.properties?.year)
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((a, b) => b - a),
+    [stravaFeatures]
+  );
+
+  const activeVisibleStravaTypes = useMemo(
+    () =>
+      visibleStravaTypes === null
+        ? availableStravaTypes
+        : visibleStravaTypes.filter((type) => availableStravaTypes.includes(type)),
+    [visibleStravaTypes, availableStravaTypes]
+  );
+
+  const activeVisibleStravaYears = useMemo(
+    () =>
+      visibleStravaYears === null
+        ? availableStravaYears
+        : visibleStravaYears.filter((year) => availableStravaYears.includes(year)),
+    [visibleStravaYears, availableStravaYears]
+  );
+
+  const stravaTypeCounts = useMemo(
+    () =>
+      stravaFeatures.reduce((counts, feature) => {
+        const type = feature?.properties?.activityType;
+        if (typeof type === "string" && type.trim()) {
+          counts[type] = (counts[type] || 0) + 1;
+        }
+        return counts;
+      }, {}),
+    [stravaFeatures]
+  );
+
+  const stravaYearCounts = useMemo(
+    () =>
+      stravaFeatures.reduce((counts, feature) => {
+        const year = feature?.properties?.year;
+        if (Number.isFinite(year)) {
+          counts[year] = (counts[year] || 0) + 1;
+        }
+        return counts;
+      }, {}),
+    [stravaFeatures]
+  );
+
+  const filteredStravaActivitiesGeoJson = useMemo(() => {
+    if (!stravaActivitiesGeoJson) return null;
+
+    return {
+      ...stravaActivitiesGeoJson,
+      features: stravaFeatures.filter((feature) => {
+        const type = feature?.properties?.activityType;
+        const year = feature?.properties?.year;
+        return activeVisibleStravaTypes.includes(type) && activeVisibleStravaYears.includes(year);
+      }),
+    };
+  }, [
+    stravaActivitiesGeoJson,
+    stravaFeatures,
+    activeVisibleStravaTypes,
+    activeVisibleStravaYears,
+  ]);
+
+  const filteredStravaCount = filteredStravaActivitiesGeoJson?.features?.length || 0;
 
   const {
     distanceKm,
@@ -92,7 +181,15 @@ export default function App() {
     clearAll,
     locateUser,
     loadRouteOnMap,
-  } = useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode });
+  } = useMap({
+    mapContainerRef,
+    mapStyle,
+    importedRoutesGeoJson,
+    stravaActivitiesGeoJson: filteredStravaActivitiesGeoJson,
+    routingMode,
+    isMobile,
+    speedMode,
+  });
 
   // ---------- Route management ----------
 
@@ -177,18 +274,36 @@ export default function App() {
 
     if (!parsedRoutes.length) { event.target.value = ""; return; }
     setImportedRoutes((current) => [...parsedRoutes, ...current]);
-    setVisibleFolders((current) => (current.includes(folder) ? current : [...current, folder]));
+    setVisibleFolders((current) => {
+      if (current === null) return null;
+      return current.includes(folder) ? current : [...current, folder];
+    });
     event.target.value = "";
   };
 
   const toggleFolderVisibility = (folder) => {
-    setVisibleFolders((current) =>
-      current.includes(folder) ? current.filter((e) => e !== folder) : [...current, folder]
-    );
+    setVisibleFolders((current) => {
+      const base = current === null ? availableFolders : current;
+      return base.includes(folder) ? base.filter((entry) => entry !== folder) : [...base, folder];
+    });
   };
 
   const updateImportedRouteColor = (routeId, color) => {
     setImportedRoutes((current) => current.map((r) => (r.id === routeId ? { ...r, color } : r)));
+  };
+
+  const toggleStravaTypeVisibility = (type) => {
+    setVisibleStravaTypes((current) => {
+      const base = current === null ? availableStravaTypes : current;
+      return base.includes(type) ? base.filter((entry) => entry !== type) : [...base, type];
+    });
+  };
+
+  const toggleStravaYearVisibility = (year) => {
+    setVisibleStravaYears((current) => {
+      const base = current === null ? availableStravaYears : current;
+      return base.includes(year) ? base.filter((entry) => entry !== year) : [...base, year];
+    });
   };
 
   // ---------- UI helpers ----------
@@ -389,7 +504,7 @@ export default function App() {
               <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
                 {availableFolders.map((folder) => {
                   const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
-                  const checked = visibleFolders.includes(folder);
+                  const checked = activeVisibleFolders.includes(folder);
                   return (
                     <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#24364b" }}>
                       <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -436,7 +551,7 @@ export default function App() {
             </strong>
             {stravaConnected && (
               <span style={{ fontSize: 12, opacity: 0.65 }}>
-                {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
+                {stravaFeatures.length ? `${filteredStravaCount} / ${stravaFeatures.length} activities` : "0 activities"}
               </span>
             )}
           </div>
@@ -449,7 +564,7 @@ export default function App() {
 
           {stravaLoading && (
             <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
-              {stravaConnected ? "Loading rides…" : "Connecting…"}
+              {stravaConnected ? "Loading activities…" : "Connecting…"}
             </div>
           )}
 
@@ -480,7 +595,7 @@ export default function App() {
                   disabled={stravaLoading}
                   {...getPressHandlers("strava_sync")}
                 >
-                  {stravaLoading ? "Syncing…" : "Sync rides"}
+                  {stravaLoading ? "Syncing…" : "Sync activities"}
                 </button>
                 <button
                   style={getButtonStyle("strava_disconnect")}
@@ -490,6 +605,130 @@ export default function App() {
                   Disconnect
                 </button>
               </div>
+
+              {stravaFeatures.length > 0 ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: "#6b7a8c" }}>
+                    Showing <strong>{filteredStravaCount}</strong> of <strong>{stravaFeatures.length}</strong> activities
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                        Activity types
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={getButtonStyle("strava_types_all")}
+                          onClick={() => setVisibleStravaTypes(availableStravaTypes)}
+                          {...getPressHandlers("strava_types_all")}
+                        >
+                          All
+                        </button>
+                        <button
+                          style={getButtonStyle("strava_types_none")}
+                          onClick={() => setVisibleStravaTypes([])}
+                          {...getPressHandlers("strava_types_none")}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
+                      {availableStravaTypes.map((type) => {
+                        const checked = activeVisibleStravaTypes.includes(type);
+                        return (
+                          <label
+                            key={type}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "8px 10px",
+                              borderRadius: 12,
+                              background: "#f5f7fa",
+                              border: "1px solid #e7ebf0",
+                              fontSize: 13,
+                              color: "#24364b",
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!checked}
+                                onChange={() => toggleStravaTypeVisibility(type)}
+                              />
+                              {type}
+                            </span>
+                            <span style={{ opacity: 0.65 }}>{stravaTypeCounts[type] || 0}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                        Years
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={getButtonStyle("strava_years_all")}
+                          onClick={() => setVisibleStravaYears(availableStravaYears)}
+                          {...getPressHandlers("strava_years_all")}
+                        >
+                          All
+                        </button>
+                        <button
+                          style={getButtonStyle("strava_years_none")}
+                          onClick={() => setVisibleStravaYears([])}
+                          {...getPressHandlers("strava_years_none")}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
+                      {availableStravaYears.map((year) => {
+                        const checked = activeVisibleStravaYears.includes(year);
+                        return (
+                          <label
+                            key={year}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "8px 10px",
+                              borderRadius: 12,
+                              background: "#f5f7fa",
+                              border: "1px solid #e7ebf0",
+                              fontSize: 13,
+                              color: "#24364b",
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!checked}
+                                onChange={() => toggleStravaYearVisibility(year)}
+                              />
+                              {year}
+                            </span>
+                            <span style={{ opacity: 0.65 }}>{stravaYearCounts[year] || 0}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : !stravaLoading ? (
+                <div style={{ fontSize: 12, color: "#6b7a8c" }}>No synced activities yet.</div>
+              ) : null}
             </div>
           )}
         </div>
