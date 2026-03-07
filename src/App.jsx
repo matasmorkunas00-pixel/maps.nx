@@ -539,7 +539,3 @@ export default function App() {
     </>
   );
 }
-
-
-git config --global user.name "matasmorkunas00-pixel"
-git config --global user.email "matas.morkunas00@gmail.com"
