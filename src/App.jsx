@@ -8,7 +8,11 @@ import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
 import { useStrava } from "./hooks/useStrava";
 
+const STREETS_PREVIEW_URL = "/streets-preview.jpg";
+const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
+
 export default function App() {
+  const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
   const gpxFileInputRef = useRef(null);
   const styleControlsRef = useRef(null);
@@ -21,9 +25,12 @@ export default function App() {
   const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
+  const [isGpxLibraryOpen, setIsGpxLibraryOpen] = useState(false);
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
   const [visibleStravaYears, setVisibleStravaYears] = useState(null);
+  const [isMapModesFlashOn, setIsMapModesFlashOn] = useState(false);
+  const [isLocationFlashOn, setIsLocationFlashOn] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
@@ -42,6 +49,18 @@ export default function App() {
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!isMapModesFlashOn) return;
+    const timer = setTimeout(() => setIsMapModesFlashOn(false), 200);
+    return () => clearTimeout(timer);
+  }, [isMapModesFlashOn]);
+
+  useEffect(() => {
+    if (!isLocationFlashOn) return;
+    const timer = setTimeout(() => setIsLocationFlashOn(false), 200);
+    return () => clearTimeout(timer);
+  }, [isLocationFlashOn]);
 
   const [routes, setRoutes] = useState(() => {
     try {
@@ -196,6 +215,11 @@ export default function App() {
     mapStyle,
     importedRoutesGeoJson,
     stravaActivitiesGeoJson: filteredStravaActivitiesGeoJson,
+    appleMapContainerRef,
+    mapContainerRef,
+    mapStyle,
+    importedRoutesGeoJson,
+    stravaActivitiesGeoJson,
     routingMode,
     isMobile,
     speedMode,
@@ -374,7 +398,25 @@ export default function App() {
 
   return (
     <>
-      <div ref={mapContainerRef} style={{ width: "100vw", height: "100vh" }} />
+      <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+        <div
+          ref={appleMapContainerRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            opacity: 0,
+            transition: "opacity 0.18s ease",
+          }}
+        />
+        <div
+          ref={mapContainerRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+          }}
+        />
+      </div>
 
       <div style={panelStyle}>
         <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
@@ -488,28 +530,49 @@ export default function App() {
 
         {/* GPX library */}
         <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button
+            onClick={() => setIsGpxLibraryOpen((open) => !open)}
+            style={{
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              padding: "2px 0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              color: "#000",
+            }}
+            aria-expanded={isGpxLibraryOpen}
+          >
             <strong>GPX library</strong>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>{importedRoutes.length}</span>
-          </div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.78 }}>
+              {importedRoutes.length}
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                style={{ transform: isGpxLibraryOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s ease" }}
+              >
+                <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
 
-          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-            <input
-              value={importFolderName}
-              onChange={(e) => setImportFolderName(e.target.value)}
-              placeholder="Folder name, e.g. 2024"
-              style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
-            />
-            <button style={getButtonStyle("upload")} onClick={() => gpxFileInputRef.current?.click()} {...getPressHandlers("upload")}>
-              Upload GPX files
-            </button>
-          </div>
-
-          {availableFolders.length > 0 ? (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <button style={getButtonStyle("folders_all")} onClick={() => setVisibleFolders(availableFolders)} {...getPressHandlers("folders_all")}>Show all</button>
-                <button style={getButtonStyle("folders_none")} onClick={() => setVisibleFolders([])} {...getPressHandlers("folders_none")}>Hide all</button>
+          {isGpxLibraryOpen && (
+            <>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                <input
+                  value={importFolderName}
+                  onChange={(e) => setImportFolderName(e.target.value)}
+                  placeholder="Folder name, e.g. 2024"
+                  style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
+                />
+                <button style={getButtonStyle("upload")} onClick={() => gpxFileInputRef.current?.click()} {...getPressHandlers("upload")}>
+                  Upload GPX files
+                </button>
               </div>
 
               <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
@@ -540,16 +603,53 @@ export default function App() {
                               style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
                               title={`Change color for ${route.name}`}
                             />
+              {availableFolders.length > 0 ? (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <button style={getButtonStyle("folders_all")} onClick={() => setVisibleFolders(availableFolders)} {...getPressHandlers("folders_all")}>Show all</button>
+                    <button style={getButtonStyle("folders_none")} onClick={() => setVisibleFolders([])} {...getPressHandlers("folders_none")}>Hide all</button>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
+                    {availableFolders.map((folder) => {
+                      const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
+                      const checked = visibleFolders.includes(folder);
+                      return (
+                        <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} />
+                              {folder}
+                            </span>
+                            <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
+                          </label>
+
+                          <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
+                            {folderRoutes.map((route) => (
+                              <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                  <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                                </div>
+                                <input
+                                  type="color"
+                                  value={route.color || GPX_ROUTE_COLORS[0]}
+                                  onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
+                                  style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                                  title={`Change color for ${route.name}`}
+                                />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
+              )}
+            </>
           )}
         </div>
 
@@ -804,92 +904,95 @@ export default function App() {
         {isStyleMenuOpen && (
           <div
             style={{
-              width: isMobile ? "min(92vw, 420px)" : 360,
+              width: isMobile ? 111 : 117,
               display: "grid",
-              gap: 14,
-              padding: isMobile ? 14 : 16,
-              borderRadius: 24,
-              background:
-                "radial-gradient(circle at 12% 8%, rgba(59,130,246,0.16), transparent 42%), linear-gradient(160deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.95) 100%)",
-              border: "1px solid rgba(148, 163, 184, 0.32)",
-              boxShadow: "0 18px 40px rgba(2, 6, 23, 0.45)",
-              color: "#e2e8f0",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 10,
+              padding: 6,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.94)",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              boxShadow: "0 12px 30px rgba(15, 23, 42, 0.18)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+              transition: "transform 0.16s ease, opacity 0.16s ease",
             }}
           >
-            <div style={{ fontSize: isMobile ? 30 : 34, fontWeight: 700, lineHeight: 1, textAlign: "center" }}>
-              Map Modes
-            </div>
-
-            <div
+            <button
+              onClick={() => setMapStyle("streets")}
+              onMouseUp={(e) => e.currentTarget.blur()}
+              onTouchEnd={(e) => e.currentTarget.blur()}
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 12,
+                gap: 6,
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                color: "#24364b",
+                outline: "none",
+                boxShadow: "none",
+                WebkitTapHighlightColor: "transparent",
               }}
+              title={MAP_STYLES.streets.label}
             >
-              <button
-                onClick={() => { setMapStyle("streets"); setIsStyleMenuOpen(false); }}
+              <div
                 style={{
-                  border: "none",
-                  background: "transparent",
-                  padding: 0,
-                  cursor: "pointer",
-                  display: "grid",
-                  gap: 8,
-                  color: "#e2e8f0",
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: mapStyle === "streets" ? "2px solid #2563eb" : "1px solid rgba(15, 23, 42, 0.15)",
+                  boxShadow: mapStyle === "streets" ? "0 0 0 1px rgba(37,99,235,0.28)" : "none",
                 }}
-                title={MAP_STYLES.streets.label}
               >
-                <div
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    borderRadius: 22,
-                    overflow: "hidden",
-                    border: mapStyle === "streets" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
-                    boxShadow: mapStyle === "streets" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
-                    backgroundImage:
-                      "linear-gradient(140deg, #2b4261 0%, #3e5976 35%, #2d455f 70%, #1f2f45 100%)",
-                    position: "relative",
-                  }}
-                >
-                  <div style={{ position: "absolute", inset: 0, opacity: 0.42, background: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(148,163,184,0.35) 14px 17px)" }} />
-                  <div style={{ position: "absolute", inset: 0, opacity: 0.85, background: "radial-gradient(circle at 70% 35%, rgba(16,185,129,0.45), transparent 34%), radial-gradient(circle at 20% 80%, rgba(251,191,36,0.3), transparent 30%)" }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Streets</div>
-              </button>
+                <img
+                  src={STREETS_PREVIEW_URL}
+                  alt="Streets map preview"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  loading="lazy"
+                />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Default</div>
+            </button>
 
-              <button
-                onClick={() => { setMapStyle("satellite"); setIsStyleMenuOpen(false); }}
+            <button
+              onClick={() => setMapStyle("satellite")}
+              onMouseUp={(e) => e.currentTarget.blur()}
+              onTouchEnd={(e) => e.currentTarget.blur()}
+              style={{
+                display: "grid",
+                gap: 6,
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                color: "#24364b",
+                outline: "none",
+                boxShadow: "none",
+                WebkitTapHighlightColor: "transparent",
+              }}
+              title={MAP_STYLES.satellite.label}
+            >
+              <div
                 style={{
-                  border: "none",
-                  background: "transparent",
-                  padding: 0,
-                  cursor: "pointer",
-                  display: "grid",
-                  gap: 8,
-                  color: "#e2e8f0",
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: mapStyle === "satellite" ? "2px solid #2563eb" : "1px solid rgba(15, 23, 42, 0.15)",
+                  boxShadow: mapStyle === "satellite" ? "0 0 0 1px rgba(37,99,235,0.28)" : "none",
                 }}
-                title={MAP_STYLES.satellite.label}
               >
-                <div
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    borderRadius: 22,
-                    overflow: "hidden",
-                    border: mapStyle === "satellite" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
-                    boxShadow: mapStyle === "satellite" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
-                    backgroundImage:
-                      "linear-gradient(130deg, #7c8f66 0%, #9aa87b 26%, #8f9d78 44%, #c6ba91 62%, #a9b89f 80%, #6d825f 100%)",
-                    position: "relative",
-                  }}
-                >
-                  <div style={{ position: "absolute", inset: 0, opacity: 0.3, background: "repeating-linear-gradient(20deg, transparent 0 12px, rgba(55,65,81,0.34) 12px 14px)" }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Satellite</div>
-              </button>
-            </div>
+                <img
+                  src={SATELLITE_PREVIEW_URL}
+                  alt="Satellite map preview"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  loading="lazy"
+                />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Satellite</div>
+            </button>
           </div>
         )}
 
@@ -897,28 +1000,30 @@ export default function App() {
           style={{
             display: "flex",
             gap: 8,
-            padding: 6,
-            borderRadius: 14,
-            background: "rgba(255,255,255,0.9)",
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-            backdropFilter: "blur(18px)",
-            WebkitBackdropFilter: "blur(18px)",
           }}
         >
           <button
-            onClick={() => setIsStyleMenuOpen((open) => !open)}
+            onClick={() => {
+              setIsMapModesFlashOn(true);
+              setIsStyleMenuOpen((open) => !open);
+            }}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
             aria-label="Map style options"
             style={{
               width: isMobile ? 44 : 42,
               height: isMobile ? 44 : 42,
               borderRadius: 999,
-              border: "none",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
               display: "grid",
               placeItems: "center",
-              background: "#fff",
+              background: isMapModesFlashOn ? "#dbe2ec" : "rgba(255,255,255,0.92)",
               cursor: "pointer",
               padding: 0,
+              transition: "background-color 0.2s ease",
+              outline: "none",
+              boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -928,25 +1033,34 @@ export default function App() {
           </button>
 
           <button
-            onClick={locateUser}
+            onClick={() => {
+              setIsLocationFlashOn(true);
+              locateUser();
+            }}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
             title={locationState.message}
             aria-label="Center on my location"
             style={{
               width: isMobile ? 44 : 42,
               height: isMobile ? 44 : 42,
               borderRadius: 999,
-              border: "none",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
               display: "grid",
               placeItems: "center",
-              background: "#fff",
+              background: isLocationFlashOn ? "#dbe2ec" : "rgba(255,255,255,0.92)",
               cursor: "pointer",
               padding: 0,
+              transition: "background-color 0.2s ease",
+              outline: "none",
+              boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 d="M20 4L11 13M20 4L14.5 20L11 13L4 9.5L20 4Z"
-                stroke={locationState.status === "active" ? "#0f172a" : "#24364b"}
+                stroke="#24364b"
                 strokeWidth="1.9"
                 strokeLinejoin="round"
                 strokeLinecap="round"
