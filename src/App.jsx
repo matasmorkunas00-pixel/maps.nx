@@ -607,6 +607,8 @@ export default function App() {
     event.preventDefault();
     if (!searchResults.length) return;
     await handleSearchSelect(searchResults[0]);
+  };
+
   const toggleStravaTypeVisibility = (type) => {
     setVisibleStravaTypes((current) => {
       const base = current === null ? availableStravaTypes : current;
