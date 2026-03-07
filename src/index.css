@@ -75,6 +75,20 @@ button:focus-visible {
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-logo {
+  display: none !important;
+}
+
+@keyframes user-dot-blink {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.65; }
+}
+
+.maplibregl-user-location-dot.user-location-blink {
+  animation: user-dot-blink 0.3s ease-in-out 3;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
