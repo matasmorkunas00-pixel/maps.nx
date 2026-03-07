@@ -105,7 +105,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
   const userLocationRef = useRef(null);
-  const userDotBlinkTimeoutRef = useRef(null);
+  const userMarkerRef = useRef(null);
   const currentMapStyleRef = useRef(mapStyle);
 
   // Mutable refs so stable callbacks always see the latest values
@@ -136,11 +136,24 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
     let isCancelled = false;
     let map = null;
     let geolocateControl = null;
+    const ensureUserMarker = (coords) => {
+      if (!map || !Array.isArray(coords)) return;
+      if (!userMarkerRef.current) {
+        const dot = document.createElement("div");
+        dot.style.cssText =
+          "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
+        userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
+      } else {
+        userMarkerRef.current.setLngLat(coords);
+      }
+    };
 
     const handleGeolocate = (e) => {
       const accuracy = Number.isFinite(e?.coords?.accuracy) ? Math.round(e.coords.accuracy) : null;
       if (Number.isFinite(e?.coords?.longitude) && Number.isFinite(e?.coords?.latitude)) {
-        userLocationRef.current = [e.coords.longitude, e.coords.latitude];
+        const coords = [e.coords.longitude, e.coords.latitude];
+        userLocationRef.current = coords;
+        ensureUserMarker(coords);
       }
       setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
     };
@@ -158,6 +171,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
       });
       mapRef.current = map;
       currentMapStyleRef.current = mapStyle;
+      if (Array.isArray(userLocationRef.current)) ensureUserMarker(userLocationRef.current);
 
       geolocateControl = new maplibregl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -361,9 +375,10 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
         (position) => {
           if (isCancelled) return;
           const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
-          userLocationRef.current = [position.coords.longitude, position.coords.latitude];
+          const coords = [position.coords.longitude, position.coords.latitude];
+          userLocationRef.current = coords;
           setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
-          initMap([position.coords.longitude, position.coords.latitude]);
+          initMap(coords);
         },
         (e) => {
           if (isCancelled) return;
@@ -385,10 +400,13 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
       }
       geolocateControlRef.current = null;
       userLocationRef.current = null;
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
       fns.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
-      if (userDotBlinkTimeoutRef.current) clearTimeout(userDotBlinkTimeoutRef.current);
       if (map) map.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -492,23 +510,21 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
   const locateUser = () => {
     const map = mapRef.current;
     if (!map) return;
-
-    const blinkUserDot = () => {
-      const dot = map.getContainer()?.querySelector(".maplibregl-user-location-dot");
-      if (!dot) return;
-      dot.classList.remove("user-location-blink");
-      // Force reflow so repeated clicks restart animation.
-      void dot.offsetWidth;
-      dot.classList.add("user-location-blink");
-      if (userDotBlinkTimeoutRef.current) clearTimeout(userDotBlinkTimeoutRef.current);
-      userDotBlinkTimeoutRef.current = setTimeout(() => {
-        dot.classList.remove("user-location-blink");
-      }, 900);
+    const ensureUserMarker = (coords) => {
+      if (!Array.isArray(coords)) return;
+      if (!userMarkerRef.current) {
+        const dot = document.createElement("div");
+        dot.style.cssText =
+          "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
+        userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
+      } else {
+        userMarkerRef.current.setLngLat(coords);
+      }
     };
 
     if (Array.isArray(userLocationRef.current)) {
+      ensureUserMarker(userLocationRef.current);
       map.easeTo({ center: userLocationRef.current, duration: 550, zoom: Math.max(map.getZoom(), 14) });
-      blinkUserDot();
       return;
     }
 
@@ -524,8 +540,8 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
         userLocationRef.current = coords;
         const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
         setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
+        ensureUserMarker(coords);
         map.easeTo({ center: coords, duration: 550, zoom: Math.max(map.getZoom(), 14) });
-        blinkUserDot();
       },
       (e) => {
         setLocationState({ status: "error", message: e?.code === 1 ? "Location blocked" : "Location unavailable" });
