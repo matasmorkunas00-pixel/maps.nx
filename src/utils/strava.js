@@ -90,6 +90,18 @@ export async function fetchAllActivities(accessToken) {
   return activities;
 }
 
+function getActivityType(activity) {
+  return activity?.sport_type || activity?.type || "Other";
+}
+
+function getActivityYear(activity) {
+  const rawDate = activity?.start_date_local || activity?.start_date;
+  if (!rawDate) return null;
+
+  const year = new Date(rawDate).getFullYear();
+  return Number.isFinite(year) ? year : null;
+}
+
 export function activitiesToGeoJson(activities) {
   const features = activities
     .filter((a) => a.map?.summary_polyline)
@@ -99,7 +111,13 @@ export function activitiesToGeoJson(activities) {
       properties: {
         id: a.id,
         name: a.name,
-        type: a.type,
+        type: getActivityType(a),
+        activityType: getActivityType(a),
+        legacyType: a.type,
+        sportType: a.sport_type || null,
+        year: getActivityYear(a),
+        startDate: a.start_date || null,
+        startDateLocal: a.start_date_local || null,
         distance: a.distance,
         moving_time: a.moving_time,
       },

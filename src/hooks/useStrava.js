@@ -38,8 +38,24 @@ export function useStrava() {
     if (!auth) return;
     try {
       const cached = localStorage.getItem(ACTIVITIES_CACHE_KEY);
-      if (cached) setActivitiesGeoJson(JSON.parse(cached));
-    } catch {}
+      if (!cached) return;
+
+      const parsed = JSON.parse(cached);
+      const hasCurrentMetadata = Array.isArray(parsed?.features)
+        ? parsed.features.every((feature) => {
+            const properties = feature?.properties;
+            return typeof properties?.activityType === "string" && "year" in (properties || {});
+          })
+        : false;
+
+      if (hasCurrentMetadata) {
+        setActivitiesGeoJson(parsed);
+      } else {
+        localStorage.removeItem(ACTIVITIES_CACHE_KEY);
+      }
+    } catch {
+      // Ignore invalid cached activity data and fall back to a fresh sync.
+    }
   }, [auth]);
 
   const loadActivities = useCallback(async () => {
