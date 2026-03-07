@@ -54,6 +54,21 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+@keyframes rainbow-hue {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+@keyframes rainbow-bg {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+.rainbow-marker {
+  animation: rainbow-hue 1.6s linear infinite;
+  cursor: pointer;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
