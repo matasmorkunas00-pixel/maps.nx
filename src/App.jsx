@@ -211,15 +211,11 @@ export default function App() {
     locateUser,
     loadRouteOnMap,
   } = useMap({
-    mapContainerRef,
-    mapStyle,
-    importedRoutesGeoJson,
-    stravaActivitiesGeoJson: filteredStravaActivitiesGeoJson,
     appleMapContainerRef,
     mapContainerRef,
     mapStyle,
     importedRoutesGeoJson,
-    stravaActivitiesGeoJson,
+    stravaActivitiesGeoJson: filteredStravaActivitiesGeoJson,
     routingMode,
     isMobile,
     speedMode,
@@ -575,34 +571,6 @@ export default function App() {
                 </button>
               </div>
 
-              <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
-                {availableFolders.map((folder) => {
-                  const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
-                  const checked = activeVisibleFolders.includes(folder);
-                  return (
-                    <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
-                      <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} />
-                          {folder}
-                        </span>
-                        <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
-                      </label>
-
-                      <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
-                        {folderRoutes.map((route) => (
-                          <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                              <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
-                            </div>
-                            <input
-                              type="color"
-                              value={route.color || GPX_ROUTE_COLORS[0]}
-                              onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
-                              style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
-                              title={`Change color for ${route.name}`}
-                            />
               {availableFolders.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -613,7 +581,7 @@ export default function App() {
                   <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
                     {availableFolders.map((folder) => {
                       const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
-                      const checked = visibleFolders.includes(folder);
+                      const checked = activeVisibleFolders.includes(folder);
                       return (
                         <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
                           <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -1072,4 +1040,3 @@ export default function App() {
     </>
   );
 }
-
