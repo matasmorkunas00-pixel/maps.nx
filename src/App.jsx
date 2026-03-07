@@ -36,6 +36,57 @@ function normalizeNominatimFeatures(payload) {
     });
 }
 
+function formatDistanceKm(meters) {
+  if (!Number.isFinite(meters)) return "-";
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return "-";
+
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
+}
+
+function formatSpeed(speedMetersPerSecond) {
+  if (!Number.isFinite(speedMetersPerSecond)) return "-";
+  return `${(speedMetersPerSecond * 3.6).toFixed(1)} km/h`;
+}
+
+function formatMeters(meters) {
+  if (!Number.isFinite(meters)) return "-";
+  return `${Math.round(meters).toLocaleString()} m`;
+}
+
+function formatNumber(value, digits = 0) {
+  if (!Number.isFinite(value)) return "-";
+  return Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatActivityDate(dateString) {
+  if (!dateString) return "Unknown date";
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -49,12 +100,16 @@ export default function App() {
   const [mapStyle, setMapStyle] = useState("streets");
   const [pressedButton, setPressedButton] = useState(null);
   const [importFolderName, setImportFolderName] = useState("");
-  const [visibleFolders, setVisibleFolders] = useState([]);
+  const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
   const [isGpxLibraryOpen, setIsGpxLibraryOpen] = useState(false);
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [isRoutingMenuOpen, setIsRoutingMenuOpen] = useState(false);
+  const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
+  const [visibleStravaYears, setVisibleStravaYears] = useState(null);
+  const [selectedStravaActivity, setSelectedStravaActivity] = useState(null);
+  const [isStravaActivityLoading, setIsStravaActivityLoading] = useState(false);
   const [isMapModesFlashOn, setIsMapModesFlashOn] = useState(false);
   const [isLocationFlashOn, setIsLocationFlashOn] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -201,16 +256,17 @@ export default function App() {
     [importedRoutes]
   );
 
-  useEffect(() => {
-    setVisibleFolders((current) => {
-      const next = current.filter((f) => availableFolders.includes(f));
-      return next.length ? next : availableFolders;
-    });
-  }, [availableFolders]);
+  const activeVisibleFolders = useMemo(
+    () =>
+      visibleFolders === null
+        ? availableFolders
+        : visibleFolders.filter((folder) => availableFolders.includes(folder)),
+    [visibleFolders, availableFolders]
+  );
 
   const importedRoutesGeoJson = useMemo(
-    () => buildImportedRoutesGeoJson(importedRoutes, visibleFolders),
-    [importedRoutes, visibleFolders]
+    () => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders),
+    [importedRoutes, activeVisibleFolders]
   );
 
   const {
@@ -222,7 +278,183 @@ export default function App() {
     connect: stravaConnect,
     disconnect: stravaDisconnect,
     loadActivities: stravaLoadActivities,
+    loadActivityDetails: stravaLoadActivityDetails,
   } = useStrava();
+
+  const stravaFeatures = useMemo(() => stravaActivitiesGeoJson?.features || [], [stravaActivitiesGeoJson]);
+
+  const availableStravaTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          stravaFeatures
+            .map((feature) => feature?.properties?.activityType)
+            .filter((value) => typeof value === "string" && value.trim())
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [stravaFeatures]
+  );
+
+  const availableStravaYears = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          stravaFeatures
+            .map((feature) => feature?.properties?.year)
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((a, b) => b - a),
+    [stravaFeatures]
+  );
+
+  const activeVisibleStravaTypes = useMemo(
+    () =>
+      visibleStravaTypes === null
+        ? availableStravaTypes
+        : visibleStravaTypes.filter((type) => availableStravaTypes.includes(type)),
+    [visibleStravaTypes, availableStravaTypes]
+  );
+
+  const activeVisibleStravaYears = useMemo(
+    () =>
+      visibleStravaYears === null
+        ? availableStravaYears
+        : visibleStravaYears.filter((year) => availableStravaYears.includes(year)),
+    [visibleStravaYears, availableStravaYears]
+  );
+
+  const stravaTypeCounts = useMemo(
+    () =>
+      stravaFeatures.reduce((counts, feature) => {
+        const type = feature?.properties?.activityType;
+        if (typeof type === "string" && type.trim()) {
+          counts[type] = (counts[type] || 0) + 1;
+        }
+        return counts;
+      }, {}),
+    [stravaFeatures]
+  );
+
+  const stravaYearCounts = useMemo(
+    () =>
+      stravaFeatures.reduce((counts, feature) => {
+        const year = feature?.properties?.year;
+        if (Number.isFinite(year)) {
+          counts[year] = (counts[year] || 0) + 1;
+        }
+        return counts;
+      }, {}),
+    [stravaFeatures]
+  );
+
+  const filteredStravaActivitiesGeoJson = useMemo(() => {
+    if (!stravaActivitiesGeoJson) return null;
+
+    return {
+      ...stravaActivitiesGeoJson,
+      features: stravaFeatures.filter((feature) => {
+        const type = feature?.properties?.activityType;
+        const year = feature?.properties?.year;
+        return activeVisibleStravaTypes.includes(type) && activeVisibleStravaYears.includes(year);
+      }),
+    };
+  }, [
+    stravaActivitiesGeoJson,
+    stravaFeatures,
+    activeVisibleStravaTypes,
+    activeVisibleStravaYears,
+  ]);
+
+  const filteredStravaCount = filteredStravaActivitiesGeoJson?.features?.length || 0;
+  const filteredStravaFeatures = useMemo(
+    () => filteredStravaActivitiesGeoJson?.features || [],
+    [filteredStravaActivitiesGeoJson]
+  );
+  const selectedStravaActivityId = selectedStravaActivity?.id ?? null;
+  const mapStravaActivitiesGeoJson = useMemo(() => {
+    if (!stravaActivitiesGeoJson) return null;
+    if (!selectedStravaActivityId) return filteredStravaActivitiesGeoJson;
+
+    const selectedFeature = stravaFeatures.find((feature) => feature?.properties?.id === selectedStravaActivityId);
+    return {
+      ...stravaActivitiesGeoJson,
+      features: selectedFeature ? [selectedFeature] : [],
+    };
+  }, [
+    filteredStravaActivitiesGeoJson,
+    selectedStravaActivityId,
+    stravaActivitiesGeoJson,
+    stravaFeatures,
+  ]);
+  const sortedFilteredStravaFeatures = useMemo(
+    () =>
+      [...filteredStravaFeatures].sort((a, b) => {
+        const aDate = new Date(a?.properties?.startDateLocal || a?.properties?.startDate || 0).getTime();
+        const bDate = new Date(b?.properties?.startDateLocal || b?.properties?.startDate || 0).getTime();
+        return bDate - aDate;
+      }),
+    [filteredStravaFeatures]
+  );
+  const selectedStravaStats = useMemo(() => {
+    if (!selectedStravaActivity) return [];
+
+    const stats = [
+      { label: "Distance", value: formatDistanceKm(selectedStravaActivity.distance) },
+      { label: "Moving time", value: formatDuration(selectedStravaActivity.moving_time) },
+      { label: "Elapsed time", value: formatDuration(selectedStravaActivity.elapsedTime) },
+      { label: "Elevation", value: formatMeters(selectedStravaActivity.totalElevationGain) },
+      { label: "Avg speed", value: formatSpeed(selectedStravaActivity.averageSpeed) },
+      { label: "Max speed", value: formatSpeed(selectedStravaActivity.maxSpeed) },
+      { label: "Avg heart rate", value: Number.isFinite(selectedStravaActivity.averageHeartrate) ? `${Math.round(selectedStravaActivity.averageHeartrate)} bpm` : "-" },
+      { label: "Max heart rate", value: Number.isFinite(selectedStravaActivity.maxHeartrate) ? `${Math.round(selectedStravaActivity.maxHeartrate)} bpm` : "-" },
+      { label: "Calories", value: Number.isFinite(selectedStravaActivity.calories) ? formatNumber(selectedStravaActivity.calories) : "-" },
+      { label: "Kudos", value: Number.isFinite(selectedStravaActivity.kudosCount) ? formatNumber(selectedStravaActivity.kudosCount) : "-" },
+      { label: "Achievements", value: Number.isFinite(selectedStravaActivity.achievementCount) ? formatNumber(selectedStravaActivity.achievementCount) : "-" },
+      { label: "Photos", value: Number.isFinite(selectedStravaActivity.totalPhotoCount) ? formatNumber(selectedStravaActivity.totalPhotoCount) : "-" },
+      { label: "Avg watts", value: Number.isFinite(selectedStravaActivity.averageWatts) ? `${Math.round(selectedStravaActivity.averageWatts)} W` : "-" },
+      { label: "Energy", value: Number.isFinite(selectedStravaActivity.kilojoules) ? `${formatNumber(selectedStravaActivity.kilojoules)} kJ` : "-" },
+    ];
+
+    return stats.filter((stat) => stat.value !== "-");
+  }, [selectedStravaActivity]);
+
+  const selectedStravaPrimaryPhotoUrl = useMemo(() => {
+    const urls = selectedStravaActivity?.primaryPhotoUrls;
+    if (!urls || typeof urls !== "object") return null;
+    return urls["600"] || urls["2800"] || urls["100"] || Object.values(urls)[0] || null;
+  }, [selectedStravaActivity]);
+
+  useEffect(() => {
+    if (!selectedStravaActivity) return;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSelectedStravaActivity(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedStravaActivity]);
+
+  const closeStravaActivityModal = () => {
+    setSelectedStravaActivity(null);
+    setIsStravaActivityLoading(false);
+  };
+
+  const openStravaActivity = async (feature) => {
+    const summary = feature?.properties;
+    if (!summary?.id) return;
+
+    setSelectedStravaActivity(summary);
+    setIsStravaActivityLoading(true);
+
+    const details = await stravaLoadActivityDetails(summary.id);
+    setSelectedStravaActivity((current) =>
+      current?.id === summary.id && details ? { ...current, ...details } : current
+    );
+    setIsStravaActivityLoading(false);
+  };
 
   const {
     distanceKm,
@@ -243,7 +475,8 @@ export default function App() {
     mapContainerRef,
     mapStyle,
     importedRoutesGeoJson,
-    stravaActivitiesGeoJson,
+    stravaActivitiesGeoJson: mapStravaActivitiesGeoJson,
+    selectedStravaActivityId,
     routingMode,
     isMobile,
     speedMode,
@@ -332,14 +565,18 @@ export default function App() {
 
     if (!parsedRoutes.length) { event.target.value = ""; return; }
     setImportedRoutes((current) => [...parsedRoutes, ...current]);
-    setVisibleFolders((current) => (current.includes(folder) ? current : [...current, folder]));
+    setVisibleFolders((current) => {
+      if (current === null) return null;
+      return current.includes(folder) ? current : [...current, folder];
+    });
     event.target.value = "";
   };
 
   const toggleFolderVisibility = (folder) => {
-    setVisibleFolders((current) =>
-      current.includes(folder) ? current.filter((e) => e !== folder) : [...current, folder]
-    );
+    setVisibleFolders((current) => {
+      const base = current === null ? availableFolders : current;
+      return base.includes(folder) ? base.filter((entry) => entry !== folder) : [...base, folder];
+    });
   };
 
   const updateImportedRouteColor = (routeId, color) => {
@@ -370,6 +607,18 @@ export default function App() {
     event.preventDefault();
     if (!searchResults.length) return;
     await handleSearchSelect(searchResults[0]);
+  const toggleStravaTypeVisibility = (type) => {
+    setVisibleStravaTypes((current) => {
+      const base = current === null ? availableStravaTypes : current;
+      return base.includes(type) ? base.filter((entry) => entry !== type) : [...base, type];
+    });
+  };
+
+  const toggleStravaYearVisibility = (year) => {
+    setVisibleStravaYears((current) => {
+      const base = current === null ? availableStravaYears : current;
+      return base.includes(year) ? base.filter((entry) => entry !== year) : [...base, year];
+    });
   };
 
   // ---------- UI helpers ----------
@@ -685,7 +934,7 @@ export default function App() {
                   <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
                     {availableFolders.map((folder) => {
                       const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
-                      const checked = visibleFolders.includes(folder);
+                      const checked = activeVisibleFolders.includes(folder);
                       return (
                         <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
                           <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -734,7 +983,7 @@ export default function App() {
             </strong>
             {stravaConnected && (
               <span style={{ fontSize: 12, opacity: 0.65 }}>
-                {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
+                {stravaFeatures.length ? `${filteredStravaCount} / ${stravaFeatures.length} activities` : "0 activities"}
               </span>
             )}
           </div>
@@ -747,7 +996,7 @@ export default function App() {
 
           {stravaLoading && (
             <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
-              {stravaConnected ? "Loading rides…" : "Connecting…"}
+              {stravaConnected ? "Loading activities…" : "Connecting…"}
             </div>
           )}
 
@@ -778,16 +1027,194 @@ export default function App() {
                   disabled={stravaLoading}
                   {...getPressHandlers("strava_sync")}
                 >
-                  {stravaLoading ? "Syncing…" : "Sync rides"}
+                  {stravaLoading ? "Syncing…" : "Sync activities"}
                 </button>
                 <button
                   style={getButtonStyle("strava_disconnect")}
-                  onClick={stravaDisconnect}
+                  onClick={() => {
+                    closeStravaActivityModal();
+                    stravaDisconnect();
+                  }}
                   {...getPressHandlers("strava_disconnect")}
                 >
                   Disconnect
                 </button>
               </div>
+
+              {stravaFeatures.length > 0 ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: "#6b7a8c" }}>
+                    Showing <strong>{filteredStravaCount}</strong> of <strong>{stravaFeatures.length}</strong> activities
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                        Activity types
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={getButtonStyle("strava_types_all")}
+                          onClick={() => setVisibleStravaTypes(availableStravaTypes)}
+                          {...getPressHandlers("strava_types_all")}
+                        >
+                          All
+                        </button>
+                        <button
+                          style={getButtonStyle("strava_types_none")}
+                          onClick={() => setVisibleStravaTypes([])}
+                          {...getPressHandlers("strava_types_none")}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
+                      {availableStravaTypes.map((type) => {
+                        const checked = activeVisibleStravaTypes.includes(type);
+                        return (
+                          <label
+                            key={type}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "8px 10px",
+                              borderRadius: 12,
+                              background: "#f5f7fa",
+                              border: "1px solid #e7ebf0",
+                              fontSize: 13,
+                              color: "#24364b",
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!checked}
+                                onChange={() => toggleStravaTypeVisibility(type)}
+                              />
+                              {type}
+                            </span>
+                            <span style={{ opacity: 0.65 }}>{stravaTypeCounts[type] || 0}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                        Years
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          style={getButtonStyle("strava_years_all")}
+                          onClick={() => setVisibleStravaYears(availableStravaYears)}
+                          {...getPressHandlers("strava_years_all")}
+                        >
+                          All
+                        </button>
+                        <button
+                          style={getButtonStyle("strava_years_none")}
+                          onClick={() => setVisibleStravaYears([])}
+                          {...getPressHandlers("strava_years_none")}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
+                      {availableStravaYears.map((year) => {
+                        const checked = activeVisibleStravaYears.includes(year);
+                        return (
+                          <label
+                            key={year}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "8px 10px",
+                              borderRadius: 12,
+                              background: "#f5f7fa",
+                              border: "1px solid #e7ebf0",
+                              fontSize: 13,
+                              color: "#24364b",
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!checked}
+                                onChange={() => toggleStravaYearVisibility(year)}
+                              />
+                              {year}
+                            </span>
+                            <span style={{ opacity: 0.65 }}>{stravaYearCounts[year] || 0}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                        Activity list
+                      </div>
+                      <div style={{ fontSize: 12, color: "#6b7a8c" }}>{sortedFilteredStravaFeatures.length}</div>
+                    </div>
+
+                    {sortedFilteredStravaFeatures.length > 0 ? (
+                      <div style={{ display: "grid", gap: 6, maxHeight: isMobile ? 220 : 280, overflow: "auto" }}>
+                        {sortedFilteredStravaFeatures.map((feature) => {
+                          const activity = feature.properties || {};
+
+                          return (
+                            <button
+                              key={activity.id}
+                              onClick={() => openStravaActivity(feature)}
+                              style={{
+                                textAlign: "left",
+                                display: "grid",
+                                gap: 6,
+                                padding: "10px 12px",
+                                borderRadius: 12,
+                                border: "1px solid #e7ebf0",
+                                background: "#f5f7fa",
+                                cursor: "pointer",
+                              }}
+                              title="View activity stats"
+                            >
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#24364b", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {activity.name || "Unnamed activity"}
+                                </div>
+                                <div style={{ fontSize: 11, color: "#FC4C02", fontWeight: 700, flexShrink: 0 }}>
+                                  {activity.activityType || "Other"}
+                                </div>
+                              </div>
+
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "#5c6c7c" }}>
+                                <span>{formatActivityDate(activity.startDateLocal || activity.startDate)}</span>
+                                <span>{formatDistanceKm(activity.distance)}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: "#6b7a8c" }}>No activities match the current filters.</div>
+                    )}
+                  </div>
+                </div>
+              ) : !stravaLoading ? (
+                <div style={{ fontSize: 12, color: "#6b7a8c" }}>No synced activities yet.</div>
+              ) : null}
             </div>
           )}
         </div>
@@ -1110,6 +1537,167 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {selectedStravaActivity && stravaConnected && (
+        <div
+          onClick={closeStravaActivityModal}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 30,
+            background: "rgba(15, 23, 42, 0.42)",
+            display: "grid",
+            placeItems: "center",
+            padding: isMobile ? 16 : 24,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              maxHeight: "78vh",
+              overflowY: "auto",
+              borderRadius: 18,
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.28)",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              padding: isMobile ? 14 : 16,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      borderRadius: 999,
+                      padding: "5px 9px",
+                      background: "rgba(252,76,2,0.1)",
+                      color: "#FC4C02",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    {selectedStravaActivity.activityType || "Other"}
+                  </span>
+                  {Number.isFinite(selectedStravaActivity.year) && (
+                    <span style={{ fontSize: 12, color: "#6b7a8c" }}>{selectedStravaActivity.year}</span>
+                  )}
+                </div>
+                <div style={{ marginTop: 10, fontSize: isMobile ? 22 : 24, fontWeight: 800, color: "#24364b", lineHeight: 1.15 }}>
+                  {selectedStravaActivity.name || "Unnamed activity"}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, color: "#5c6c7c" }}>
+                  {formatActivityDate(selectedStravaActivity.startDateLocal || selectedStravaActivity.startDate)}
+                </div>
+              </div>
+
+              <button
+                onClick={closeStravaActivityModal}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 999,
+                  border: "1px solid #d7dce3",
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontSize: 18,
+                  lineHeight: 1,
+                  color: "#24364b",
+                  flexShrink: 0,
+                }}
+                aria-label="Close activity details"
+              >
+                ×
+              </button>
+            </div>
+
+            {selectedStravaPrimaryPhotoUrl && (
+              <div style={{ marginTop: 14 }}>
+                <img
+                  src={selectedStravaPrimaryPhotoUrl}
+                  alt={selectedStravaActivity.name || "Strava activity"}
+                  style={{
+                    width: "100%",
+                    maxHeight: 200,
+                    objectFit: "cover",
+                    borderRadius: 14,
+                    display: "block",
+                    border: "1px solid #e7ebf0",
+                  }}
+                />
+              </div>
+            )}
+
+            {isStravaActivityLoading && (
+              <div style={{ marginTop: 12, fontSize: 12, color: "#6b7a8c" }}>
+                Loading activity details...
+              </div>
+            )}
+
+            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {selectedStravaStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: 12,
+                    background: "#f5f7fa",
+                    border: "1px solid #e7ebf0",
+                  }}
+                >
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                    {stat.label}
+                  </div>
+                  <div style={{ marginTop: 5, fontSize: 15, fontWeight: 700, color: "#24364b" }}>
+                    {stat.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {selectedStravaActivity.description && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "#f8fafc",
+                  border: "1px solid #e7ebf0",
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  color: "#425466",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {selectedStravaActivity.description}
+              </div>
+            )}
+
+            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {selectedStravaActivity.trainer && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eef2ff", color: "#3847a8", fontSize: 12, fontWeight: 600 }}>
+                  Trainer ride
+                </span>
+              )}
+              {selectedStravaActivity.commute && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: "#ecfeff", color: "#0f766e", fontSize: 12, fontWeight: 600 }}>
+                  Commute
+                </span>
+              )}
+              {selectedStravaActivity.private && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: "#f3f4f6", color: "#4b5563", fontSize: 12, fontWeight: 600 }}>
+                  Private
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

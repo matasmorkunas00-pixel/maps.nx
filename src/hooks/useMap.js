@@ -156,9 +156,24 @@ function calculateElevationGain(geojson) {
   return total;
 }
 
+function fitLineStringBounds(map, coordinates, isMobile) {
+  if (!map || !Array.isArray(coordinates) || !coordinates.length) return;
+
+  const bounds = coordinates.reduce(
+    (acc, coord) => acc.extend(coord),
+    new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
+  );
+
+  map.fitBounds(bounds, {
+    padding: isMobile ? 56 : 84,
+    duration: 500,
+    maxZoom: 15,
+  });
+}
+
 // ---------- Hook ----------
 
-export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode }) {
+export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, selectedStravaActivityId, routingMode, isMobile, speedMode }) {
   const mapRef = useRef(null);
   const appleMapRef = useRef(null);
   const appleMapKitRef = useRef(null);
@@ -582,6 +597,20 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       removeLayerAndSource(map, "strava-routes", "strava-routes");
     }
   }, [stravaActivitiesGeoJson]);
+
+  // ---------- Selected Strava activity ----------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedStravaActivityId) return;
+
+    const feature =
+      stravaActivitiesGeoJson?.features?.find((entry) => entry?.properties?.id === selectedStravaActivityId) ||
+      stravaActivitiesGeoJson?.features?.[0];
+    const coordinates = feature?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || !coordinates.length) return;
+
+    fitLineStringBounds(map, coordinates, isMobileRef.current);
+  }, [selectedStravaActivityId, stravaActivitiesGeoJson]);
 
   // ---------- Routing mode change ----------
   useEffect(() => {
