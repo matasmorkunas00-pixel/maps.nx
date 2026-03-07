@@ -10,6 +10,7 @@ import { useMap } from "./hooks/useMap";
 export default function App() {
   const mapContainerRef = useRef(null);
   const gpxFileInputRef = useRef(null);
+  const styleControlsRef = useRef(null);
 
   const [routeName, setRouteName] = useState("My Route");
   const [routingMode, setRoutingMode] = useState("gravel");
@@ -19,6 +20,7 @@ export default function App() {
   const [visibleFolders, setVisibleFolders] = useState([]);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
+  const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
@@ -28,6 +30,14 @@ export default function App() {
     const onChange = () => setIsMobile(mq.matches);
     mq.addEventListener?.("change", onChange);
     return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!styleControlsRef.current?.contains(event.target)) setIsStyleMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
   const [routes, setRoutes] = useState(() => {
@@ -462,81 +472,171 @@ export default function App() {
         </div>
       </div>
 
-      {/* Map style switcher */}
-      <div style={{
-        position: "absolute",
-        left: 10,
-        bottom: isMobile ? 108 : 10,
-        zIndex: 2,
-        display: "flex",
-        gap: 4,
-        padding: 4,
-        borderRadius: 14,
-        background: "rgba(255,255,255,0.66)",
-        boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-        border: "1px solid rgba(15, 23, 42, 0.08)",
-        backdropFilter: "blur(18px)",
-        WebkitBackdropFilter: "blur(18px)",
-      }}>
-        {Object.entries(MAP_STYLES).map(([value, option]) => {
-          const active = mapStyle === value;
-          return (
-            <button
-              key={value}
-              onClick={() => setMapStyle(value)}
-              style={{
-                border: "none",
-                borderRadius: 11,
-                minWidth: isMobile ? 62 : 68,
-                padding: isMobile ? "8px 10px" : "8px 11px",
-                background: active ? "rgba(36,54,75,0.92)" : "rgba(255,255,255,0.44)",
-                color: active ? "#fff" : "#24364b",
-                cursor: "pointer",
-                fontSize: 12,
-                lineHeight: 1,
-                fontWeight: active ? 700 : 600,
-                boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.08)" : "inset 0 0 0 1px rgba(36,54,75,0.08)",
-              }}
-              title={option.label}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Location button */}
-      <button
-        onClick={locateUser}
-        title={locationState.message}
-        aria-label="Center on my location"
+      <div
+        ref={styleControlsRef}
         style={{
           position: "absolute",
-          right: 10,
+          left: 10,
           bottom: isMobile ? 108 : 10,
           zIndex: 2,
-          width: isMobile ? 42 : 40,
-          height: isMobile ? 42 : 40,
           display: "grid",
-          placeItems: "center",
-          borderRadius: 999,
-          border: "1px solid rgba(15, 23, 42, 0.08)",
-          background: locationState.status === "active" ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.6)",
-          boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          cursor: "pointer",
-          padding: 0,
+          gap: 8,
         }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          {["M12 2.75V6.1", "M12 17.9V21.25", "M2.75 12H6.1", "M17.9 12H21.25"].map((d) => (
-            <path key={d} d={d} stroke={locationState.status === "active" ? "#1d4ed8" : "#24364b"} strokeWidth="1.75" strokeLinecap="round" />
-          ))}
-          <circle cx="12" cy="12" r="5" stroke={locationState.status === "active" ? "#1d4ed8" : "#24364b"} strokeWidth="1.75" />
-          <circle cx="12" cy="12" r="1.8" fill={locationState.status === "active" ? "#1d4ed8" : "#24364b"} />
-        </svg>
-      </button>
+        {isStyleMenuOpen && (
+          <div
+            style={{
+              width: isMobile ? "min(92vw, 420px)" : 360,
+              display: "grid",
+              gap: 14,
+              padding: isMobile ? 14 : 16,
+              borderRadius: 24,
+              background:
+                "radial-gradient(circle at 12% 8%, rgba(59,130,246,0.16), transparent 42%), linear-gradient(160deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.95) 100%)",
+              border: "1px solid rgba(148, 163, 184, 0.32)",
+              boxShadow: "0 18px 40px rgba(2, 6, 23, 0.45)",
+              color: "#e2e8f0",
+            }}
+          >
+            <div style={{ fontSize: isMobile ? 30 : 34, fontWeight: 700, lineHeight: 1, textAlign: "center" }}>
+              Map Modes
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              <button
+                onClick={() => { setMapStyle("streets"); setIsStyleMenuOpen(false); }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "grid",
+                  gap: 8,
+                  color: "#e2e8f0",
+                }}
+                title={MAP_STYLES.streets.label}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    border: mapStyle === "streets" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
+                    boxShadow: mapStyle === "streets" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
+                    backgroundImage:
+                      "linear-gradient(140deg, #2b4261 0%, #3e5976 35%, #2d455f 70%, #1f2f45 100%)",
+                    position: "relative",
+                  }}
+                >
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.42, background: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(148,163,184,0.35) 14px 17px)" }} />
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.85, background: "radial-gradient(circle at 70% 35%, rgba(16,185,129,0.45), transparent 34%), radial-gradient(circle at 20% 80%, rgba(251,191,36,0.3), transparent 30%)" }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Streets</div>
+              </button>
+
+              <button
+                onClick={() => { setMapStyle("satellite"); setIsStyleMenuOpen(false); }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "grid",
+                  gap: 8,
+                  color: "#e2e8f0",
+                }}
+                title={MAP_STYLES.satellite.label}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    border: mapStyle === "satellite" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
+                    boxShadow: mapStyle === "satellite" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
+                    backgroundImage:
+                      "linear-gradient(130deg, #7c8f66 0%, #9aa87b 26%, #8f9d78 44%, #c6ba91 62%, #a9b89f 80%, #6d825f 100%)",
+                    position: "relative",
+                  }}
+                >
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.3, background: "repeating-linear-gradient(20deg, transparent 0 12px, rgba(55,65,81,0.34) 12px 14px)" }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Satellite</div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            padding: 6,
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.9)",
+            border: "1px solid rgba(15, 23, 42, 0.08)",
+            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+          }}
+        >
+          <button
+            onClick={() => setIsStyleMenuOpen((open) => !open)}
+            aria-label="Map style options"
+            style={{
+              width: isMobile ? 44 : 42,
+              height: isMobile ? 44 : 42,
+              borderRadius: 999,
+              border: "none",
+              display: "grid",
+              placeItems: "center",
+              background: "#fff",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.75 6.25L8.95 3.6C9.29 3.43 9.69 3.43 10.03 3.6L14 5.62L18.95 3.6C19.71 3.29 20.5 3.84 20.5 4.66V17.75L15.05 20.4C14.71 20.57 14.31 20.57 13.97 20.4L10 18.38L5.05 20.4C4.29 20.71 3.5 20.16 3.5 19.34V6.75C3.5 6.54 3.61 6.35 3.75 6.25Z" fill="#24364b" />
+              <path d="M10 3.75V18.25M14 5.62V20.25" stroke="rgba(255,255,255,0.45)" strokeWidth="1.15" />
+            </svg>
+          </button>
+
+          <button
+            onClick={locateUser}
+            title={locationState.message}
+            aria-label="Center on my location"
+            style={{
+              width: isMobile ? 44 : 42,
+              height: isMobile ? 44 : 42,
+              borderRadius: 999,
+              border: "none",
+              display: "grid",
+              placeItems: "center",
+              background: "#fff",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M20 4L11 13M20 4L14.5 20L11 13L4 9.5L20 4Z"
+                stroke={locationState.status === "active" ? "#0f172a" : "#24364b"}
+                strokeWidth="1.9"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
     </>
   );
 }
