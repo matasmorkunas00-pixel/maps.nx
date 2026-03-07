@@ -15,6 +15,7 @@ const IMPORTED_PAINT = {
   "line-width": 2.5,
   "line-opacity": 0.72,
 };
+const STRAVA_PAINT = { "line-color": "#FC4C02", "line-width": 2, "line-opacity": 0.65 };
 
 function ensureSource(map, id, data) {
   if (!map.getSource(id)) {
@@ -35,6 +36,12 @@ function addRouteLayers(map, geojson) {
 function addImportedLayer(map, geojson) {
   if (ensureSource(map, "imported-routes", geojson)) {
     map.addLayer({ id: "imported-routes", type: "line", source: "imported-routes", paint: IMPORTED_PAINT });
+  }
+}
+
+function addStravaLayer(map, geojson) {
+  if (ensureSource(map, "strava-routes", geojson)) {
+    map.addLayer({ id: "strava-routes", type: "line", source: "strava-routes", paint: STRAVA_PAINT });
   }
 }
 
@@ -91,7 +98,7 @@ function calculateElevationGain(geojson) {
 
 // ---------- Hook ----------
 
-export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode }) {
+export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode }) {
   const mapRef = useRef(null);
   const waypointsRef = useRef([]);
   const markersRef = useRef([]);
@@ -104,6 +111,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
   // Mutable refs so stable callbacks always see the latest values
   const routingModeRef = useRef(routingMode);
   const importedGeoJsonRef = useRef(importedRoutesGeoJson);
+  const stravaGeoJsonRef = useRef(stravaActivitiesGeoJson);
   const isMobileRef = useRef(isMobile);
   const speedModeRef = useRef(speedMode);
 
@@ -116,6 +124,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
 
   useEffect(() => { routingModeRef.current = routingMode; }, [routingMode]);
   useEffect(() => { importedGeoJsonRef.current = importedRoutesGeoJson; }, [importedRoutesGeoJson]);
+  useEffect(() => { stravaGeoJsonRef.current = stravaActivitiesGeoJson; }, [stravaActivitiesGeoJson]);
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
   useEffect(() => { speedModeRef.current = speedMode; }, [speedMode]);
 
@@ -304,27 +313,28 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
 
       fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer };
 
-      // --- Map events ---
-      map.on("load", () => {
-        addImportedLayer(map, importedGeoJsonRef.current);
-        geolocateControl.trigger();
+    // --- Map events ---
+    map.on("load", () => {
+      addImportedLayer(map, importedGeoJsonRef.current);
+      if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
 
         map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
 
-        map.on("click", (e) => {
-          const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
-          if (hits?.length && routeDataRef.current) {
-            const coords = routeDataRef.current.features[0].geometry.coordinates;
-            const nearest = nearestPointOnLine(coords, [e.lngLat.lng, e.lngLat.lat]);
-            if (nearest && nearest.dist2 < 35 * 35) {
-              const idx = getWaypointInsertIndex(routeDataRef.current, nearest.routeSegmentIndex, waypointsRef.current.length);
-              waypointsRef.current.splice(idx, 0, nearest.point);
-              renderMarkers();
-              calculateRoute();
-              return;
-            }
+      map.on("click", (e) => {
+        if (e.originalEvent.target.closest(".maplibregl-marker")) return;
+        const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
+        if (hits?.length && routeDataRef.current) {
+          const coords = routeDataRef.current.features[0].geometry.coordinates;
+          const nearest = nearestPointOnLine(coords, [e.lngLat.lng, e.lngLat.lat]);
+          if (nearest && nearest.dist2 < 35 * 35) {
+            const idx = getWaypointInsertIndex(routeDataRef.current, nearest.routeSegmentIndex, waypointsRef.current.length);
+            waypointsRef.current.splice(idx, 0, nearest.point);
+            renderMarkers();
+            calculateRoute();
+            return;
           }
+        }
 
           const { lng, lat } = e.lngLat;
           const index = waypointsRef.current.length;
@@ -397,6 +407,8 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
+      const strava = stravaGeoJsonRef.current;
+      if (strava?.features?.length) addStravaLayer(map, strava);
     });
   }, [mapStyle]);
 
@@ -410,6 +422,17 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
       removeLayerAndSource(map, "imported-routes", "imported-routes");
     }
   }, [importedRoutesGeoJson]);
+
+  // ---------- Strava activities ----------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    if (stravaActivitiesGeoJson?.features?.length) {
+      addStravaLayer(map, stravaActivitiesGeoJson);
+    } else {
+      removeLayerAndSource(map, "strava-routes", "strava-routes");
+    }
+  }, [stravaActivitiesGeoJson]);
 
   // ---------- Routing mode change ----------
   useEffect(() => {

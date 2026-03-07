@@ -6,6 +6,7 @@ import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
 import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
+import { useStrava } from "./hooks/useStrava";
 
 export default function App() {
   const mapContainerRef = useRef(null);
@@ -78,6 +79,17 @@ export default function App() {
   );
 
   const {
+    isConnected: stravaConnected,
+    athleteName: stravaAthleteName,
+    activitiesGeoJson: stravaActivitiesGeoJson,
+    isLoading: stravaLoading,
+    error: stravaError,
+    connect: stravaConnect,
+    disconnect: stravaDisconnect,
+    loadActivities: stravaLoadActivities,
+  } = useStrava();
+
+  const {
     distanceKm,
     elevationGainM,
     routeGeoJson,
@@ -90,7 +102,7 @@ export default function App() {
     clearAll,
     locateUser,
     loadRouteOnMap,
-  } = useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode });
+  } = useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, routingMode, isMobile, speedMode });
 
   // ---------- Route management ----------
 
@@ -423,6 +435,73 @@ export default function App() {
             </div>
           ) : (
             <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
+          )}
+        </div>
+
+        {/* Strava */}
+        <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+              Strava
+            </strong>
+            {stravaConnected && (
+              <span style={{ fontSize: 12, opacity: 0.65 }}>
+                {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
+              </span>
+            )}
+          </div>
+
+          {stravaError && (
+            <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 12 }}>
+              {stravaError}
+            </div>
+          )}
+
+          {stravaLoading && (
+            <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
+              {stravaConnected ? "Loading rides…" : "Connecting…"}
+            </div>
+          )}
+
+          {!stravaConnected ? (
+            <button
+              style={{
+                ...getButtonStyle("strava_connect"),
+                width: "100%",
+                background: pressedButton === "strava_connect" ? "#e34200" : "#FC4C02",
+                color: "#fff",
+                border: "none",
+                fontWeight: 600,
+              }}
+              onClick={stravaConnect}
+              {...getPressHandlers("strava_connect")}
+            >
+              Connect Strava
+            </button>
+          ) : (
+            <div style={{ display: "grid", gap: 6 }}>
+              {stravaAthleteName && (
+                <div style={{ fontSize: 12, color: "#6b7a8c" }}>Connected as <strong>{stravaAthleteName}</strong></div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+                <button
+                  style={{ ...getButtonStyle("strava_sync"), fontWeight: 600 }}
+                  onClick={stravaLoadActivities}
+                  disabled={stravaLoading}
+                  {...getPressHandlers("strava_sync")}
+                >
+                  {stravaLoading ? "Syncing…" : "Sync rides"}
+                </button>
+                <button
+                  style={getButtonStyle("strava_disconnect")}
+                  onClick={stravaDisconnect}
+                  {...getPressHandlers("strava_disconnect")}
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
