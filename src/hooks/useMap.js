@@ -47,6 +47,7 @@ function removeLayerAndSource(map, layerId, sourceId) {
 function createMarkerElement(rainbow = false) {
   const el = document.createElement("div");
   el.className = rainbow ? "rainbow-marker" : "";
+  el.addEventListener("click", (e) => e.stopPropagation());
   el.innerHTML = `<svg display="block" height="41px" width="27px" viewBox="0 0 27 41">
     <g fill-rule="nonzero">
       <g transform="translate(3.0, 29.0)" fill="#000000">
