@@ -69,6 +69,12 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.waypoint-popup .maplibregl-popup-content {
+  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
