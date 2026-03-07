@@ -58,7 +58,7 @@ function createMarkerElement(rainbow = false) {
         <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="5.5" ry="2.86"></ellipse>
         <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="4.5" ry="2.39"></ellipse>
       </g>
-      <g class="marker-body">
+      <g class="marker-body" fill="#3FB1CE">
         <path d="M27,13.5 C27,19.074644 20.250001,27.000002 14.75,34.500002 C14.016665,35.500004 12.983335,35.500004 12.25,34.500002 C6.7499993,27.000002 0,19.222562 0,13.5 C0,6.0441559 6.0441559,0 13.5,0 C20.955844,0 27,6.0441559 27,13.5 Z"></path>
       </g>
       <g opacity="0.25" fill="#000000">
