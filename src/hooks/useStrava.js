@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getStravaAuthUrl, getStoredAuth, storeAuth, clearAuth,
-  exchangeCode, getValidToken, fetchAllActivities, activitiesToGeoJson,
+  exchangeCode, getValidToken, fetchAllActivities, activitiesToGeoJson, fetchActivityDetails, activityToProperties,
 } from "../utils/strava";
 
 const ACTIVITIES_CACHE_KEY = "strava_activities_cache";
@@ -11,6 +11,7 @@ export function useStrava() {
   const [activitiesGeoJson, setActivitiesGeoJson] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const activityDetailsCacheRef = useRef(new Map());
 
   // Handle OAuth callback — Strava redirects back with ?code=...
   useEffect(() => {
@@ -78,9 +79,29 @@ export function useStrava() {
   const disconnect = useCallback(() => {
     clearAuth();
     localStorage.removeItem(ACTIVITIES_CACHE_KEY);
+    activityDetailsCacheRef.current.clear();
     setAuth(null);
     setActivitiesGeoJson(null);
   }, []);
+
+  const loadActivityDetails = useCallback(async (activityId) => {
+    if (!auth || !activityId) return null;
+
+    if (activityDetailsCacheRef.current.has(activityId)) {
+      return activityDetailsCacheRef.current.get(activityId);
+    }
+
+    try {
+      const token = await getValidToken(auth, (newAuth) => setAuth(newAuth));
+      const activity = await fetchActivityDetails(token, activityId);
+      const details = activityToProperties(activity);
+      activityDetailsCacheRef.current.set(activityId, details);
+      return details;
+    } catch (err) {
+      setError("Failed to load activity details: " + err.message);
+      return null;
+    }
+  }, [auth]);
 
   const connect = useCallback(() => {
     window.location.href = getStravaAuthUrl();
@@ -99,5 +120,6 @@ export function useStrava() {
     connect,
     disconnect,
     loadActivities,
+    loadActivityDetails,
   };
 }
