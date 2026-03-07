@@ -175,6 +175,38 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
       }
     }
 
+    function attachRemovePopup(marker) {
+      const container = document.createElement("div");
+      container.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 2px;";
+
+      const label = document.createElement("span");
+      label.textContent = "Waypoint";
+      label.style.cssText = "font-size:11px;font-weight:600;color:#666;font-family:system-ui,sans-serif;letter-spacing:0.04em;text-transform:uppercase;";
+
+      const btn = document.createElement("button");
+      btn.textContent = "✕ Remove";
+      btn.style.cssText = "padding:5px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;";
+      btn.addEventListener("mouseenter", () => { btn.style.background = "#dc2626"; });
+      btn.addEventListener("mouseleave", () => { btn.style.background = "#ef4444"; });
+      btn.addEventListener("click", () => {
+        const idx = markersRef.current.indexOf(marker);
+        if (idx === -1) return;
+        waypointsRef.current.splice(idx, 1);
+        markersRef.current.splice(idx, 1);
+        marker.remove();
+        if (waypointsRef.current.length < 2) {
+          fns.current?.clearRouteState();
+        } else {
+          fns.current?.calculateRoute();
+        }
+      });
+
+      container.appendChild(label);
+      container.appendChild(btn);
+      const popup = new maplibregl.Popup({ closeButton: false, offset: 25, className: "waypoint-popup" }).setDOMContent(container);
+      marker.setPopup(popup);
+    }
+
     function renderMarkers() {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
@@ -187,6 +219,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
           waypointsRef.current[idx] = [p.lng, p.lat];
           fns.current.calculateRoute();
         });
+        attachRemovePopup(marker);
         markersRef.current.push(marker);
       });
     }
@@ -292,6 +325,7 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, routi
           waypointsRef.current[index] = [p.lng, p.lat];
           calculateRoute();
         });
+        attachRemovePopup(marker);
         markersRef.current.push(marker);
         calculateRoute();
       });
