@@ -198,12 +198,13 @@ export default function App() {
     width: isMobile ? "auto" : 320,
     maxHeight: isMobile ? "70vh" : "calc(100vh - 20px)",
     overflowY: "auto",
-    background: "rgba(255,255,255,0.8)",
+    background: "rgba(255,255,255,0.9)",
     padding: isMobile ? 14 : 16,
     borderRadius: 16,
     boxShadow: "0 18px 44px rgba(15, 23, 42, 0.12)",
     border: "1px solid rgba(15, 23, 42, 0.08)",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+    color: "#000",
   };
 
   const btn = {
@@ -213,22 +214,22 @@ export default function App() {
     background: "#fff",
     cursor: "pointer",
     fontSize: isMobile ? 16 : 14,
-    color: "#24364b",
+    color: "#000",
   };
 
   const getButtonStyle = (buttonId, emphasis = false) => ({
     ...btn,
     fontWeight: emphasis ? 600 : 500,
-    background: pressedButton === buttonId ? "#24364b" : "#fff",
-    color: pressedButton === buttonId ? "#fff" : "#24364b",
-    borderColor: pressedButton === buttonId ? "#24364b" : "#d7dce3",
+    background: pressedButton === buttonId ? "#eef2f7" : "#fff",
+    color: "#000",
+    borderColor: pressedButton === buttonId ? "#000" : "#d7dce3",
   });
 
   const inputStyle = {
     borderRadius: 12,
     border: "1px solid #d7dce3",
     fontSize: isMobile ? 16 : 14,
-    color: "#24364b",
+    color: "#000",
     background: "#fff",
   };
 
@@ -248,7 +249,7 @@ export default function App() {
             borderRadius: 10,
             background: "#fef2f2",
             border: "1px solid #fecaca",
-            color: "#dc2626",
+            color: "#000",
             fontSize: 13,
           }}>
             {routingError}
@@ -296,8 +297,8 @@ export default function App() {
               ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)"
               : "none",
             background: speedMode ? undefined : "#fff",
-            color: speedMode ? "#fff" : "#24364b",
-            textShadow: speedMode ? "0 1px 2px rgba(0,0,0,0.4)" : "none",
+            color: "#000",
+            textShadow: "none",
             backgroundSize: "200% 100%",
             animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
           }}
@@ -306,7 +307,7 @@ export default function App() {
         </button>
 
         {isRouting && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#000", textAlign: "center" }}>
             Calculating route…
           </div>
         )}
@@ -322,17 +323,17 @@ export default function App() {
             {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
               ({ label, value, unit }) => (
                 <div key={label} style={{ padding: "10px 12px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0" }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>{label}</div>
-                  <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#24364b" }}>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
+                  <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#000" }}>
                     {value}
-                    <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#5c6c7c" }}>{unit}</span>
+                    <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#000" }}>{unit}</span>
                   </div>
                 </div>
               )
             )}
           </div>
 
-          <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#6b7a8c", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#000", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Routing mode
             <select
               value={routingMode}
@@ -379,7 +380,7 @@ export default function App() {
                   const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
                   const checked = visibleFolders.includes(folder);
                   return (
-                    <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#24364b" }}>
+                    <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
                       <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} />
