@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, GPX_ROUTE_COLORS, ROUTING_MODES, MAP_STYLES } from "./constants";
+import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, GPX_ROUTE_COLORS, ROUTING_MODES, MAP_STYLES, MAPTILER_API_KEY } from "./constants";
 import { uid } from "./utils/geo";
 import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
@@ -10,12 +10,39 @@ import { useStrava } from "./hooks/useStrava";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
+const SEARCH_RESULT_LIMIT = 8;
+
+function normalizeMapTilerFeatures(payload) {
+  const features = Array.isArray(payload?.features) ? payload.features : [];
+  return features.filter((feature) => Array.isArray(feature?.center) && feature.center.length === 2);
+}
+
+function normalizeNominatimFeatures(payload) {
+  const items = Array.isArray(payload) ? payload : [];
+  return items
+    .filter((item) => Number.isFinite(Number(item?.lon)) && Number.isFinite(Number(item?.lat)))
+    .map((item) => {
+      const primary =
+        item?.namedetails?.name ||
+        item?.name ||
+        (typeof item?.display_name === "string" ? item.display_name.split(",")[0]?.trim() : "") ||
+        "Unnamed place";
+      return {
+        id: `nominatim-${item.place_id || `${item.lon}-${item.lat}`}`,
+        center: [Number(item.lon), Number(item.lat)],
+        text: primary,
+        place_name: item.display_name || primary,
+      };
+    });
+}
 
 export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
   const gpxFileInputRef = useRef(null);
   const styleControlsRef = useRef(null);
+  const searchBoxRef = useRef(null);
+  const skipNextSearchRef = useRef(false);
 
   const [routeName, setRouteName] = useState("My Route");
   const [routingMode, setRoutingMode] = useState("gravel");
@@ -27,8 +54,14 @@ export default function App() {
   const [speedMode, setSpeedMode] = useState(false);
   const [isGpxLibraryOpen, setIsGpxLibraryOpen] = useState(false);
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
+  const [isRoutingMenuOpen, setIsRoutingMenuOpen] = useState(false);
   const [isMapModesFlashOn, setIsMapModesFlashOn] = useState(false);
   const [isLocationFlashOn, setIsLocationFlashOn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
@@ -42,7 +75,13 @@ export default function App() {
 
   useEffect(() => {
     const onPointerDown = (event) => {
-      if (!styleControlsRef.current?.contains(event.target)) setIsStyleMenuOpen(false);
+      if (!searchBoxRef.current?.contains(event.target)) {
+        setIsSearchDropdownOpen(false);
+      }
+      if (!styleControlsRef.current?.contains(event.target)) {
+        setIsStyleMenuOpen(false);
+        setIsRoutingMenuOpen(false);
+      }
     };
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
@@ -59,6 +98,83 @@ export default function App() {
     const timer = setTimeout(() => setIsLocationFlashOn(false), 200);
     return () => clearTimeout(timer);
   }, [isLocationFlashOn]);
+
+  useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+    const query = searchQuery.trim();
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      setSearchError(null);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsSearchLoading(true);
+      setSearchError(null);
+      try {
+        const providers = [];
+
+        if (MAPTILER_API_KEY) {
+          providers.push(async () => {
+            const response = await fetch(
+              `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${MAPTILER_API_KEY}&autocomplete=true&fuzzyMatch=true&limit=${SEARCH_RESULT_LIMIT}&types=address,poi,place,locality,neighborhood,street`,
+              { signal: controller.signal }
+            );
+            if (!response.ok) throw new Error(`MapTiler search failed (${response.status})`);
+            const payload = await response.json();
+            return normalizeMapTilerFeatures(payload);
+          });
+        }
+
+        providers.push(async () => {
+          const language =
+            typeof navigator !== "undefined" && navigator.language ? navigator.language : "en";
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=${SEARCH_RESULT_LIMIT}&addressdetails=1&namedetails=1&extratags=1&accept-language=${encodeURIComponent(language)}`,
+            { signal: controller.signal }
+          );
+          if (!response.ok) throw new Error(`Nominatim search failed (${response.status})`);
+          const payload = await response.json();
+          return normalizeNominatimFeatures(payload);
+        });
+
+        let features = [];
+        let allFailed = true;
+        for (const runSearch of providers) {
+          try {
+            const found = await runSearch();
+            allFailed = false;
+            if (found.length) {
+              features = found;
+              break;
+            }
+          } catch (providerError) {
+            if (providerError?.name === "AbortError") throw providerError;
+          }
+        }
+
+        if (allFailed) throw new Error("All search providers failed");
+        setSearchResults(features);
+        setIsSearchDropdownOpen(true);
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        setSearchResults([]);
+        setSearchError("Place search unavailable. Check your internet and try again.");
+      } finally {
+        setIsSearchLoading(false);
+      }
+    }, 240);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
 
   const [routes, setRoutes] = useState(() => {
     try {
@@ -120,6 +236,7 @@ export default function App() {
     undoLast,
     clearAll,
     locateUser,
+    routeToDestination,
     loadRouteOnMap,
   } = useMap({
     appleMapContainerRef,
@@ -229,6 +346,32 @@ export default function App() {
     setImportedRoutes((current) => current.map((r) => (r.id === routeId ? { ...r, color } : r)));
   };
 
+  const getSearchResultLabels = (feature) => {
+    const primary = feature?.text || feature?.place_name || "Unnamed place";
+    const secondary = feature?.place_name && feature.place_name !== primary ? feature.place_name : "";
+    return { primary, secondary };
+  };
+
+  const handleSearchSelect = async (feature) => {
+    if (!Array.isArray(feature?.center) || feature.center.length < 2) return;
+    const label = feature?.place_name || feature?.text || "";
+    skipNextSearchRef.current = true;
+    setSearchQuery(label);
+    setIsSearchDropdownOpen(false);
+    setSearchError(null);
+    const routeResult = await routeToDestination(feature.center);
+    if (!routeResult?.ok) {
+      setSearchError(routeResult?.message || "Could not route to that place.");
+    }
+  };
+
+  const handleSearchKeyDown = async (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (!searchResults.length) return;
+    await handleSearchSelect(searchResults[0]);
+  };
+
   // ---------- UI helpers ----------
 
   const getPressHandlers = (buttonId) => ({
@@ -282,6 +425,7 @@ export default function App() {
     color: "#000",
     background: "#fff",
   };
+  const activeRoutingLabel = ROUTING_MODES[routingMode]?.label || "Routing";
 
   // ---------- Render ----------
 
@@ -309,6 +453,90 @@ export default function App() {
 
       <div style={panelStyle}>
         <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
+
+        <div ref={searchBoxRef} style={{ position: "relative", marginBottom: 10 }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => {
+              if (searchResults.length || searchQuery.trim().length >= 2) setIsSearchDropdownOpen(true);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search address, shops, tourist places..."
+            style={{ ...inputStyle, width: "100%", padding: isMobile ? "12px 42px 12px 12px" : "11px 40px 11px 12px", boxSizing: "border-box" }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#506176",
+              pointerEvents: "none",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {isSearchDropdownOpen && (isSearchLoading || searchResults.length > 0 || searchQuery.trim().length >= 2) && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                zIndex: 4,
+                borderRadius: 12,
+                border: "1px solid rgba(15, 23, 42, 0.12)",
+                background: "rgba(255,255,255,0.94)",
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                overflow: "hidden",
+              }}
+            >
+              {isSearchLoading ? (
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>Searching places...</div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>No places found</div>
+              ) : (
+                <div style={{ maxHeight: 230, overflowY: "auto" }}>
+                  {searchResults.map((feature) => {
+                    const { primary, secondary } = getSearchResultLabels(feature);
+                    return (
+                      <button
+                        key={`${feature.id || feature.place_name}-${feature.center[0]}-${feature.center[1]}`}
+                        onClick={() => handleSearchSelect(feature)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          border: "none",
+                          background: "transparent",
+                          padding: "10px 12px",
+                          cursor: "pointer",
+                          borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>{primary}</div>
+                        {secondary && <div style={{ marginTop: 2, fontSize: 12, color: "#64748b" }}>{secondary}</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchError && (
+            <div style={{ marginTop: 6, fontSize: 12, color: "#b91c1c" }}>
+              {searchError}
+            </div>
+          )}
+        </div>
 
         {routingError && (
           <div style={{
@@ -382,10 +610,6 @@ export default function App() {
 
         <div style={{
           marginTop: 14,
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: 10,
-          alignItems: "start",
         }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
@@ -400,19 +624,6 @@ export default function App() {
               )
             )}
           </div>
-
-          <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#000", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Routing mode
-            <select
-              value={routingMode}
-              onChange={(e) => setRoutingMode(e.target.value)}
-              style={{ ...inputStyle, width: "100%", padding: isMobile ? "11px 12px" : "10px 12px" }}
-            >
-              {Object.entries(ROUTING_MODES).map(([value, opt]) => (
-                <option key={value} value={value}>{opt.label}</option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <ElevationChart routeGeoJson={routeGeoJson} />
@@ -733,6 +944,55 @@ export default function App() {
           </div>
         )}
 
+        {isRoutingMenuOpen && (
+          <div
+            style={{
+              minWidth: isMobile ? 152 : 164,
+              display: "grid",
+              gap: 4,
+              padding: 6,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.82)",
+              border: "1px solid rgba(15, 23, 42, 0.1)",
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.16)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              transformOrigin: "left bottom",
+              animation: "routing-menu-in 0.18s ease both",
+            }}
+          >
+            {Object.entries(ROUTING_MODES).filter(([value]) => value !== routingMode).map(([value, opt]) => {
+              return (
+                <button
+                  key={value}
+                  onClick={() => {
+                    setRoutingMode(value);
+                    setIsRoutingMenuOpen(false);
+                  }}
+                  onMouseUp={(e) => e.currentTarget.blur()}
+                  onTouchEnd={(e) => e.currentTarget.blur()}
+                  style={{
+                    border: "none",
+                    borderRadius: 8,
+                    background: "transparent",
+                    color: "#000",
+                    textAlign: "left",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    padding: "8px 10px",
+                    cursor: "pointer",
+                    outline: "none",
+                    boxShadow: "none",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -742,6 +1002,7 @@ export default function App() {
           <button
             onClick={() => {
               setIsMapModesFlashOn(true);
+              setIsRoutingMenuOpen(false);
               setIsStyleMenuOpen((open) => !open);
             }}
             onMouseUp={(e) => e.currentTarget.blur()}
@@ -772,6 +1033,8 @@ export default function App() {
           <button
             onClick={() => {
               setIsLocationFlashOn(true);
+              setIsStyleMenuOpen(false);
+              setIsRoutingMenuOpen(false);
               locateUser();
             }}
             onMouseUp={(e) => e.currentTarget.blur()}
@@ -802,6 +1065,47 @@ export default function App() {
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsStyleMenuOpen(false);
+              setIsRoutingMenuOpen((open) => !open);
+            }}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            aria-label="Routing mode options"
+            style={{
+              minWidth: isMobile ? 118 : 126,
+              height: isMobile ? 44 : 42,
+              borderRadius: 12,
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: isRoutingMenuOpen ? "#dbe2ec" : "rgba(255,255,255,0.92)",
+              cursor: "pointer",
+              padding: "0 12px",
+              transition: "background-color 0.2s ease",
+              outline: "none",
+              boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+              WebkitTapHighlightColor: "transparent",
+              color: "#000",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <span style={{ whiteSpace: "nowrap" }}>{activeRoutingLabel}</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{ transform: isRoutingMenuOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s ease" }}
+            >
+              <path d="M6 9L12 15L18 9" stroke="#24364b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>

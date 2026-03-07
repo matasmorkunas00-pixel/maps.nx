@@ -29,6 +29,25 @@ const IMPORTED_PAINT = {
   "line-opacity": 0.72,
 };
 const STRAVA_PAINT = { "line-color": "#FC4C02", "line-width": 2, "line-opacity": 0.65 };
+const COUNTRY_BORDERS_URL = "https://cdn.jsdelivr.net/gh/datasets/geo-countries@master/data/countries.geojson";
+
+function getCountryBorderHaloPaint(mapStyle) {
+  const isSatellite = mapStyle === "satellite";
+  return {
+    "line-color": isSatellite ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
+    "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 4, 1.1, 8, 1.6],
+    "line-opacity": isSatellite ? 0.7 : 0.55,
+  };
+}
+
+function getCountryBorderLinePaint(mapStyle) {
+  const isSatellite = mapStyle === "satellite";
+  return {
+    "line-color": isSatellite ? "rgba(70,85,104,0.96)" : "rgba(92,108,130,0.95)",
+    "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.35, 4, 0.7, 8, 1.1],
+    "line-opacity": isSatellite ? 0.95 : 0.85,
+  };
+}
 
 function ensureSource(map, id, data) {
   if (!map.getSource(id)) {
@@ -55,6 +74,25 @@ function addImportedLayer(map, geojson) {
 function addStravaLayer(map, geojson) {
   if (ensureSource(map, "strava-routes", geojson)) {
     map.addLayer({ id: "strava-routes", type: "line", source: "strava-routes", paint: STRAVA_PAINT });
+  }
+}
+
+function addCountryBordersLayer(map, mapStyle) {
+  if (ensureSource(map, "country-borders", COUNTRY_BORDERS_URL)) {
+    map.addLayer({
+      id: "country-borders-halo",
+      type: "line",
+      source: "country-borders",
+      paint: getCountryBorderHaloPaint(mapStyle),
+      layout: { "line-join": "round", "line-cap": "round" },
+    });
+    map.addLayer({
+      id: "country-borders",
+      type: "line",
+      source: "country-borders",
+      paint: getCountryBorderLinePaint(mapStyle),
+      layout: { "line-join": "round", "line-cap": "round" },
+    });
   }
 }
 
@@ -393,6 +431,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
     // --- Map events ---
     map.on("load", () => {
+      addCountryBordersLayer(map, mapStyle);
       map.on("move", syncAppleBasemapCamera);
       map.on("zoom", syncAppleBasemapCamera);
       map.on("resize", syncAppleBasemapCamera);
@@ -513,6 +552,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           new appleMapKitRef.current.CoordinateSpan(latDelta, lngDelta)
         );
       }
+      addCountryBordersLayer(map, mapStyle);
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
@@ -598,23 +638,40 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     fns.current?.clearRouteState();
   };
 
+  const ensureUserMarkerOnMap = (map, coords) => {
+    if (!map || !Array.isArray(coords)) return;
+    if (!userMarkerRef.current) {
+      const dot = document.createElement("div");
+      dot.style.cssText =
+        "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
+      userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
+    } else {
+      userMarkerRef.current.setLngLat(coords);
+    }
+  };
+
+  const drawRouteBetweenPoints = (map, startCoords, endCoords) => {
+    if (!map || !Array.isArray(startCoords) || !Array.isArray(endCoords)) return;
+    waypointsRef.current = [
+      [startCoords[0], startCoords[1]],
+      [endCoords[0], endCoords[1]],
+    ];
+    fns.current?.renderMarkers();
+    fns.current?.calculateRoute();
+    const lngs = waypointsRef.current.map((p) => p[0]);
+    const lats = waypointsRef.current.map((p) => p[1]);
+    map.fitBounds(
+      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: isMobileRef.current ? 90 : 140, duration: 550 }
+    );
+  };
+
   const locateUser = () => {
     const map = mapRef.current;
     if (!map) return;
-    const ensureUserMarker = (coords) => {
-      if (!Array.isArray(coords)) return;
-      if (!userMarkerRef.current) {
-        const dot = document.createElement("div");
-        dot.style.cssText =
-          "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
-        userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
-      } else {
-        userMarkerRef.current.setLngLat(coords);
-      }
-    };
 
     if (Array.isArray(userLocationRef.current)) {
-      ensureUserMarker(userLocationRef.current);
+      ensureUserMarkerOnMap(map, userLocationRef.current);
       map.easeTo({ center: userLocationRef.current, duration: 550, zoom: Math.max(map.getZoom(), 14) });
       return;
     }
@@ -631,7 +688,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         userLocationRef.current = coords;
         const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
         setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
-        ensureUserMarker(coords);
+        ensureUserMarkerOnMap(map, coords);
         map.easeTo({ center: coords, duration: 550, zoom: Math.max(map.getZoom(), 14) });
       },
       (e) => {
@@ -639,6 +696,54 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
     );
+  };
+
+  const routeToDestination = async (destinationCoords) => {
+    const map = mapRef.current;
+    if (!map) return { ok: false, message: "Map not ready yet." };
+    if (!Array.isArray(destinationCoords) || destinationCoords.length < 2) {
+      return { ok: false, message: "Invalid destination coordinates." };
+    }
+
+    const destination = [Number(destinationCoords[0]), Number(destinationCoords[1])];
+    if (!Number.isFinite(destination[0]) || !Number.isFinite(destination[1])) {
+      return { ok: false, message: "Invalid destination coordinates." };
+    }
+
+    const buildRouteFrom = (origin) => {
+      ensureUserMarkerOnMap(map, origin);
+      drawRouteBetweenPoints(map, origin, destination);
+    };
+
+    if (Array.isArray(userLocationRef.current)) {
+      buildRouteFrom(userLocationRef.current);
+      return { ok: true };
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationState({ status: "error", message: "Location unavailable" });
+      return { ok: false, message: "Location unavailable." };
+    }
+
+    setLocationState({ status: "pending", message: "Requesting location..." });
+    return await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const origin = [position.coords.longitude, position.coords.latitude];
+          userLocationRef.current = origin;
+          const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
+          setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
+          buildRouteFrom(origin);
+          resolve({ ok: true });
+        },
+        (e) => {
+          const message = e?.code === 1 ? "Location blocked" : "Location unavailable";
+          setLocationState({ status: "error", message });
+          resolve({ ok: false, message });
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
+      );
+    });
   };
 
   const loadRouteOnMap = (savedRoute) => {
@@ -678,6 +783,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     undoLast,
     clearAll,
     locateUser,
+    routeToDestination,
     loadRouteOnMap,
   };
 }
