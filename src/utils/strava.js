@@ -102,39 +102,54 @@ function getActivityYear(activity) {
   return Number.isFinite(year) ? year : null;
 }
 
+export function activityToProperties(activity) {
+  return {
+    id: activity.id,
+    name: activity.name,
+    type: getActivityType(activity),
+    activityType: getActivityType(activity),
+    legacyType: activity.type,
+    sportType: activity.sport_type || null,
+    year: getActivityYear(activity),
+    startDate: activity.start_date || null,
+    startDateLocal: activity.start_date_local || null,
+    distance: activity.distance,
+    moving_time: activity.moving_time,
+    elapsedTime: activity.elapsed_time ?? null,
+    totalElevationGain: activity.total_elevation_gain ?? null,
+    averageSpeed: activity.average_speed ?? null,
+    maxSpeed: activity.max_speed ?? null,
+    averageHeartrate: activity.average_heartrate ?? null,
+    maxHeartrate: activity.max_heartrate ?? null,
+    calories: activity.calories ?? null,
+    kudosCount: activity.kudos_count ?? null,
+    achievementCount: activity.achievement_count ?? null,
+    averageWatts: activity.average_watts ?? null,
+    kilojoules: activity.kilojoules ?? null,
+    trainer: !!activity.trainer,
+    commute: !!activity.commute,
+    private: !!activity.private,
+    description: activity.description || "",
+    totalPhotoCount: activity.total_photo_count ?? activity.photos?.count ?? 0,
+    primaryPhotoUrls: activity.photos?.primary?.urls || null,
+  };
+}
+
 export function activitiesToGeoJson(activities) {
   const features = activities
     .filter((a) => a.map?.summary_polyline)
     .map((a) => ({
       type: "Feature",
       geometry: { type: "LineString", coordinates: decodePolyline(a.map.summary_polyline) },
-      properties: {
-        id: a.id,
-        name: a.name,
-        type: getActivityType(a),
-        activityType: getActivityType(a),
-        legacyType: a.type,
-        sportType: a.sport_type || null,
-        year: getActivityYear(a),
-        startDate: a.start_date || null,
-        startDateLocal: a.start_date_local || null,
-        distance: a.distance,
-        moving_time: a.moving_time,
-        elapsedTime: a.elapsed_time ?? null,
-        totalElevationGain: a.total_elevation_gain ?? null,
-        averageSpeed: a.average_speed ?? null,
-        maxSpeed: a.max_speed ?? null,
-        averageHeartrate: a.average_heartrate ?? null,
-        maxHeartrate: a.max_heartrate ?? null,
-        calories: a.calories ?? null,
-        kudosCount: a.kudos_count ?? null,
-        achievementCount: a.achievement_count ?? null,
-        averageWatts: a.average_watts ?? null,
-        kilojoules: a.kilojoules ?? null,
-        trainer: !!a.trainer,
-        commute: !!a.commute,
-        private: !!a.private,
-      },
+      properties: activityToProperties(a),
     }));
   return { type: "FeatureCollection", features };
+}
+
+export async function fetchActivityDetails(accessToken, activityId) {
+  const res = await fetch(`https://www.strava.com/api/v3/activities/${activityId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch activity details");
+  return res.json();
 }
