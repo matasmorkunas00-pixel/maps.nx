@@ -1,11 +1,12 @@
 const CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID;
 const CLIENT_SECRET = import.meta.env.VITE_STRAVA_CLIENT_SECRET;
+const REDIRECT_URI = import.meta.env.VITE_STRAVA_REDIRECT_URI || window.location.origin;
 const AUTH_STORAGE_KEY = "strava_auth";
 
 export function getStravaAuthUrl() {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
-    redirect_uri: window.location.origin,
+    redirect_uri: REDIRECT_URI,
     response_type: "code",
     scope: "activity:read_all",
     approval_prompt: "auto",
