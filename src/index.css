@@ -75,6 +75,11 @@ button:focus-visible {
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-logo {
+  display: none !important;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

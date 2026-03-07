@@ -4,6 +4,7 @@ import { MAP_STYLES, GPX_ROUTE_COLORS, ROUTING_MODES } from "../constants";
 import { nearestPointOnLine, getWaypointInsertIndex, getFilteredElevations, arePointsClose } from "../utils/geo";
 
 const ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY;
+const DEFAULT_CENTER = [25.2797, 54.6872];
 
 // ---------- Layer helpers ----------
 
@@ -103,6 +104,8 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
   const markersRef = useRef([]);
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
+  const userLocationRef = useRef(null);
+  const userMarkerRef = useRef(null);
   const currentMapStyleRef = useRef(mapStyle);
 
   // Mutable refs so stable callbacks always see the latest values
@@ -130,184 +133,207 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
 
   // ---------- Map init ----------
   useEffect(() => {
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: MAP_STYLES[mapStyle].style,
-      center: [25.2797, 54.6872],
-      zoom: 12,
-    });
-    mapRef.current = map;
-    currentMapStyleRef.current = mapStyle;
-
-    const geolocateControl = new maplibregl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
-      trackUserLocation: true,
-      showUserHeading: true,
-      showAccuracyCircle: true,
-    });
-    geolocateControlRef.current = geolocateControl;
-    map.addControl(geolocateControl, "top-right");
-    if (geolocateControl._container) geolocateControl._container.style.display = "none";
+    let isCancelled = false;
+    let map = null;
+    let geolocateControl = null;
+    const ensureUserMarker = (coords) => {
+      if (!map || !Array.isArray(coords)) return;
+      if (!userMarkerRef.current) {
+        const dot = document.createElement("div");
+        dot.style.cssText =
+          "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
+        userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
+      } else {
+        userMarkerRef.current.setLngLat(coords);
+      }
+    };
 
     const handleGeolocate = (e) => {
       const accuracy = Number.isFinite(e?.coords?.accuracy) ? Math.round(e.coords.accuracy) : null;
+      if (Number.isFinite(e?.coords?.longitude) && Number.isFinite(e?.coords?.latitude)) {
+        const coords = [e.coords.longitude, e.coords.latitude];
+        userLocationRef.current = coords;
+        ensureUserMarker(coords);
+      }
       setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
     };
     const handleGeolocateError = (e) => {
       setLocationState({ status: "error", message: e?.code === 1 ? "Location blocked" : "Location unavailable" });
     };
-    geolocateControl.on("geolocate", handleGeolocate);
-    geolocateControl.on("error", handleGeolocateError);
-
-    // --- Internal functions ---
-
-    async function snapToRoads(profile, points, radius) {
-      if (!points.length || !Number.isFinite(radius) || radius <= 0) return points;
-      try {
-        const res = await fetch(`https://api.openrouteservice.org/v2/snap/${profile}/json`, {
-          method: "POST",
-          headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ locations: points, radius }),
-        });
-        const data = await res.json();
-        const snapped = data?.locations;
-        if (!Array.isArray(snapped)) return points;
-        return points.map((pt, i) => {
-          const c = snapped[i];
-          if (!c?.location) return pt;
-          const d = Number(c.snapped_distance);
-          return Number.isFinite(d) && d <= radius ? c.location : pt;
-        });
-      } catch (err) {
-        console.error("Snapping error:", err);
-        return points;
-      }
-    }
-
-    function attachRemovePopup(marker) {
-      const container = document.createElement("div");
-      container.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 2px;";
-
-      const label = document.createElement("span");
-      label.textContent = "Waypoint";
-      label.style.cssText = "font-size:11px;font-weight:600;color:#666;font-family:system-ui,sans-serif;letter-spacing:0.04em;text-transform:uppercase;";
-
-      const btn = document.createElement("button");
-      btn.textContent = "✕ Remove";
-      btn.style.cssText = "padding:5px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;";
-      btn.addEventListener("mouseenter", () => { btn.style.background = "#dc2626"; });
-      btn.addEventListener("mouseleave", () => { btn.style.background = "#ef4444"; });
-      btn.addEventListener("click", () => {
-        const idx = markersRef.current.indexOf(marker);
-        if (idx === -1) return;
-        waypointsRef.current.splice(idx, 1);
-        markersRef.current.splice(idx, 1);
-        marker.remove();
-        if (waypointsRef.current.length < 2) {
-          fns.current?.clearRouteState();
-        } else {
-          fns.current?.calculateRoute();
-        }
+    const initMap = (center) => {
+      if (isCancelled || !mapContainerRef.current) return;
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: MAP_STYLES[mapStyle].style,
+        center,
+        zoom: 12,
+        attributionControl: false,
       });
+      mapRef.current = map;
+      currentMapStyleRef.current = mapStyle;
+      if (Array.isArray(userLocationRef.current)) ensureUserMarker(userLocationRef.current);
 
-      container.appendChild(label);
-      container.appendChild(btn);
-      const popup = new maplibregl.Popup({ closeButton: false, offset: 25, className: "waypoint-popup" }).setDOMContent(container);
-      marker.setPopup(popup);
-    }
-
-    function renderMarkers() {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      waypointsRef.current.forEach(([lng, lat], idx) => {
-        const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
-          .setLngLat([lng, lat])
-          .addTo(map);
-        marker.on("dragend", () => {
-          const p = marker.getLngLat();
-          waypointsRef.current[idx] = [p.lng, p.lat];
-          fns.current.calculateRoute();
-        });
-        attachRemovePopup(marker);
-        markersRef.current.push(marker);
+      geolocateControl = new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserHeading: true,
+        showAccuracyCircle: true,
       });
-    }
+      geolocateControlRef.current = geolocateControl;
+      map.addControl(geolocateControl, "top-right");
+      if (geolocateControl._container) geolocateControl._container.style.display = "none";
+      geolocateControl.on("geolocate", handleGeolocate);
+      geolocateControl.on("error", handleGeolocateError);
 
-    function clearRouteLayer() {
-      removeLayerAndSource(map, "route", null);
-      removeLayerAndSource(map, "route-hit-area", "route");
-    }
+      // --- Internal functions ---
 
-    function clearRouteState() {
-      routeDataRef.current = null;
-      setRouteGeoJson(null);
-      setDistanceKm("0.00");
-      setElevationGainM("0");
-      clearRouteLayer();
-    }
-
-    async function calculateRoute() {
-      if (waypointsRef.current.length < 2) return;
-
-      const mode = ROUTING_MODES[routingModeRef.current] || ROUTING_MODES.gravel;
-      let routeWaypoints = waypointsRef.current;
-
-      if (routingModeRef.current === "mainRoads") {
-        const snapped = await snapToRoads(mode.profile, waypointsRef.current, mode.snapRadius);
-        const changed = snapped.some((pt, i) => !arePointsClose(pt, waypointsRef.current[i]));
-        if (changed) {
-          waypointsRef.current = snapped.map(([lng, lat]) => [lng, lat]);
-          routeWaypoints = waypointsRef.current;
-          renderMarkers();
-        } else {
-          routeWaypoints = snapped;
-        }
-      }
-
-      setIsRouting(true);
-      setRoutingError(null);
-
-      try {
-        const res = await fetch(
-          `https://api.openrouteservice.org/v2/directions/${mode.profile}/geojson`,
-          {
+      async function snapToRoads(profile, points, radius) {
+        if (!points.length || !Number.isFinite(radius) || radius <= 0) return points;
+        try {
+          const res = await fetch(`https://api.openrouteservice.org/v2/snap/${profile}/json`, {
             method: "POST",
             headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
-            body: JSON.stringify({ coordinates: routeWaypoints, elevation: true }),
-          }
-        );
-        const data = await res.json();
+            body: JSON.stringify({ locations: points, radius }),
+          });
+          const data = await res.json();
+          const snapped = data?.locations;
+          if (!Array.isArray(snapped)) return points;
+          return points.map((pt, i) => {
+            const c = snapped[i];
+            if (!c?.location) return pt;
+            const d = Number(c.snapped_distance);
+            return Number.isFinite(d) && d <= radius ? c.location : pt;
+          });
+        } catch (err) {
+          console.error("Snapping error:", err);
+          return points;
+        }
+      }
 
-        if (!data.features?.length) {
-          setRoutingError("No route found. Try moving your waypoints.");
-          return;
+      function attachRemovePopup(marker) {
+        const container = document.createElement("div");
+        container.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 2px;";
+
+        const label = document.createElement("span");
+        label.textContent = "Waypoint";
+        label.style.cssText = "font-size:11px;font-weight:600;color:#666;font-family:system-ui,sans-serif;letter-spacing:0.04em;text-transform:uppercase;";
+
+        const btn = document.createElement("button");
+        btn.textContent = "✕ Remove";
+        btn.style.cssText = "padding:5px 14px;border-radius:6px;border:none;background:#ef4444;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:system-ui,sans-serif;";
+        btn.addEventListener("mouseenter", () => { btn.style.background = "#dc2626"; });
+        btn.addEventListener("mouseleave", () => { btn.style.background = "#ef4444"; });
+        btn.addEventListener("click", () => {
+          const idx = markersRef.current.indexOf(marker);
+          if (idx === -1) return;
+          waypointsRef.current.splice(idx, 1);
+          markersRef.current.splice(idx, 1);
+          marker.remove();
+          if (waypointsRef.current.length < 2) {
+            fns.current?.clearRouteState();
+          } else {
+            fns.current?.calculateRoute();
+          }
+        });
+
+        container.appendChild(label);
+        container.appendChild(btn);
+        const popup = new maplibregl.Popup({ closeButton: false, offset: 25, className: "waypoint-popup" }).setDOMContent(container);
+        marker.setPopup(popup);
+      }
+
+      function renderMarkers() {
+        markersRef.current.forEach((m) => m.remove());
+        markersRef.current = [];
+        waypointsRef.current.forEach(([lng, lat], idx) => {
+          const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
+            .setLngLat([lng, lat])
+            .addTo(map);
+          marker.on("dragend", () => {
+            const p = marker.getLngLat();
+            waypointsRef.current[idx] = [p.lng, p.lat];
+            fns.current.calculateRoute();
+          });
+          attachRemovePopup(marker);
+          markersRef.current.push(marker);
+        });
+      }
+
+      function clearRouteLayer() {
+        removeLayerAndSource(map, "route", null);
+        removeLayerAndSource(map, "route-hit-area", "route");
+      }
+
+      function clearRouteState() {
+        routeDataRef.current = null;
+        setRouteGeoJson(null);
+        setDistanceKm("0.00");
+        setElevationGainM("0");
+        clearRouteLayer();
+      }
+
+      async function calculateRoute() {
+        if (waypointsRef.current.length < 2) return;
+
+        const mode = ROUTING_MODES[routingModeRef.current] || ROUTING_MODES.gravel;
+        let routeWaypoints = waypointsRef.current;
+
+        if (routingModeRef.current === "mainRoads") {
+          const snapped = await snapToRoads(mode.profile, waypointsRef.current, mode.snapRadius);
+          const changed = snapped.some((pt, i) => !arePointsClose(pt, waypointsRef.current[i]));
+          if (changed) {
+            waypointsRef.current = snapped.map(([lng, lat]) => [lng, lat]);
+            routeWaypoints = waypointsRef.current;
+            renderMarkers();
+          } else {
+            routeWaypoints = snapped;
+          }
         }
 
-        routeDataRef.current = data;
-        setRouteGeoJson(data);
+        setIsRouting(true);
+        setRoutingError(null);
 
-        const summary = data.features[0].properties?.summary || {};
-        setDistanceKm(((summary.distance || 0) / 1000).toFixed(2));
-        setElevationGainM(calculateElevationGain(data).toFixed(0));
+        try {
+          const res = await fetch(
+            `https://api.openrouteservice.org/v2/directions/${mode.profile}/geojson`,
+            {
+              method: "POST",
+              headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({ coordinates: routeWaypoints, elevation: true }),
+            }
+          );
+          const data = await res.json();
 
-        addRouteLayers(map, data);
-      } catch (err) {
-        console.error("Routing error:", err);
-        setRoutingError("Routing failed. Check your connection and try again.");
-      } finally {
-        setIsRouting(false);
+          if (!data.features?.length) {
+            setRoutingError("No route found. Try moving your waypoints.");
+            return;
+          }
+
+          routeDataRef.current = data;
+          setRouteGeoJson(data);
+
+          const summary = data.features[0].properties?.summary || {};
+          setDistanceKm(((summary.distance || 0) / 1000).toFixed(2));
+          setElevationGainM(calculateElevationGain(data).toFixed(0));
+
+          addRouteLayers(map, data);
+        } catch (err) {
+          console.error("Routing error:", err);
+          setRoutingError("Routing failed. Check your connection and try again.");
+        } finally {
+          setIsRouting(false);
+        }
       }
-    }
 
-    fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer };
+      fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer };
 
     // --- Map events ---
     map.on("load", () => {
       addImportedLayer(map, importedGeoJsonRef.current);
       if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
 
-      map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
+        map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
 
       map.on("click", (e) => {
         if (e.originalEvent.target.closest(".maplibregl-marker")) return;
@@ -324,32 +350,64 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
           }
         }
 
-        const { lng, lat } = e.lngLat;
-        const index = waypointsRef.current.length;
-        waypointsRef.current.push([lng, lat]);
+          const { lng, lat } = e.lngLat;
+          const index = waypointsRef.current.length;
+          waypointsRef.current.push([lng, lat]);
 
-        const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
-          .setLngLat([lng, lat])
-          .addTo(map);
-        marker.on("dragend", () => {
-          const p = marker.getLngLat();
-          waypointsRef.current[index] = [p.lng, p.lat];
+          const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
+            .setLngLat([lng, lat])
+            .addTo(map);
+          marker.on("dragend", () => {
+            const p = marker.getLngLat();
+            waypointsRef.current[index] = [p.lng, p.lat];
+            calculateRoute();
+          });
+          attachRemovePopup(marker);
+          markersRef.current.push(marker);
           calculateRoute();
         });
-        attachRemovePopup(marker);
-        markersRef.current.push(marker);
-        calculateRoute();
       });
-    });
+    };
+
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      setLocationState({ status: "pending", message: "Requesting location..." });
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (isCancelled) return;
+          const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
+          const coords = [position.coords.longitude, position.coords.latitude];
+          userLocationRef.current = coords;
+          setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
+          initMap(coords);
+        },
+        (e) => {
+          if (isCancelled) return;
+          setLocationState({ status: "error", message: e?.code === 1 ? "Location blocked" : "Location unavailable" });
+          initMap(DEFAULT_CENTER);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
+      );
+    } else {
+      setLocationState({ status: "error", message: "Location unavailable" });
+      initMap(DEFAULT_CENTER);
+    }
 
     return () => {
-      geolocateControl.off("geolocate", handleGeolocate);
-      geolocateControl.off("error", handleGeolocateError);
+      isCancelled = true;
+      if (geolocateControl) {
+        geolocateControl.off("geolocate", handleGeolocate);
+        geolocateControl.off("error", handleGeolocateError);
+      }
       geolocateControlRef.current = null;
+      userLocationRef.current = null;
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
       fns.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
-      map.remove();
+      if (map) map.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -450,10 +508,46 @@ export function useMap({ mapContainerRef, mapStyle, importedRoutesGeoJson, strav
   };
 
   const locateUser = () => {
-    const ctrl = geolocateControlRef.current;
-    if (!ctrl) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const ensureUserMarker = (coords) => {
+      if (!Array.isArray(coords)) return;
+      if (!userMarkerRef.current) {
+        const dot = document.createElement("div");
+        dot.style.cssText =
+          "width:14px;height:14px;border-radius:999px;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,0.24);";
+        userMarkerRef.current = new maplibregl.Marker({ element: dot }).setLngLat(coords).addTo(map);
+      } else {
+        userMarkerRef.current.setLngLat(coords);
+      }
+    };
+
+    if (Array.isArray(userLocationRef.current)) {
+      ensureUserMarker(userLocationRef.current);
+      map.easeTo({ center: userLocationRef.current, duration: 550, zoom: Math.max(map.getZoom(), 14) });
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationState({ status: "error", message: "Location unavailable" });
+      return;
+    }
+
     setLocationState({ status: "pending", message: "Requesting location..." });
-    ctrl.trigger();
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = [position.coords.longitude, position.coords.latitude];
+        userLocationRef.current = coords;
+        const accuracy = Number.isFinite(position?.coords?.accuracy) ? Math.round(position.coords.accuracy) : null;
+        setLocationState({ status: "active", message: accuracy ? `Location on • ±${accuracy} m` : "Location on" });
+        ensureUserMarker(coords);
+        map.easeTo({ center: coords, duration: 550, zoom: Math.max(map.getZoom(), 14) });
+      },
+      (e) => {
+        setLocationState({ status: "error", message: e?.code === 1 ? "Location blocked" : "Location unavailable" });
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
+    );
   };
 
   const loadRouteOnMap = (savedRoute) => {

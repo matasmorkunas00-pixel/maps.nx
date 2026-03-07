@@ -11,6 +11,7 @@ import { useStrava } from "./hooks/useStrava";
 export default function App() {
   const mapContainerRef = useRef(null);
   const gpxFileInputRef = useRef(null);
+  const styleControlsRef = useRef(null);
 
   const [routeName, setRouteName] = useState("My Route");
   const [routingMode, setRoutingMode] = useState("gravel");
@@ -20,6 +21,7 @@ export default function App() {
   const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
+  const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
   const [visibleStravaYears, setVisibleStravaYears] = useState(null);
 
@@ -31,6 +33,14 @@ export default function App() {
     const onChange = () => setIsMobile(mq.matches);
     mq.addEventListener?.("change", onChange);
     return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!styleControlsRef.current?.contains(event.target)) setIsStyleMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
   const [routes, setRoutes] = useState(() => {
@@ -325,12 +335,13 @@ export default function App() {
     width: isMobile ? "auto" : 320,
     maxHeight: isMobile ? "70vh" : "calc(100vh - 20px)",
     overflowY: "auto",
-    background: "rgba(255,255,255,0.8)",
+    background: "rgba(255,255,255,0.9)",
     padding: isMobile ? 14 : 16,
     borderRadius: 16,
     boxShadow: "0 18px 44px rgba(15, 23, 42, 0.12)",
     border: "1px solid rgba(15, 23, 42, 0.08)",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+    color: "#000",
   };
 
   const btn = {
@@ -340,22 +351,22 @@ export default function App() {
     background: "#fff",
     cursor: "pointer",
     fontSize: isMobile ? 16 : 14,
-    color: "#24364b",
+    color: "#000",
   };
 
   const getButtonStyle = (buttonId, emphasis = false) => ({
     ...btn,
     fontWeight: emphasis ? 600 : 500,
-    background: pressedButton === buttonId ? "#24364b" : "#fff",
-    color: pressedButton === buttonId ? "#fff" : "#24364b",
-    borderColor: pressedButton === buttonId ? "#24364b" : "#d7dce3",
+    background: pressedButton === buttonId ? "#eef2f7" : "#fff",
+    color: "#000",
+    borderColor: pressedButton === buttonId ? "#000" : "#d7dce3",
   });
 
   const inputStyle = {
     borderRadius: 12,
     border: "1px solid #d7dce3",
     fontSize: isMobile ? 16 : 14,
-    color: "#24364b",
+    color: "#000",
     background: "#fff",
   };
 
@@ -375,7 +386,7 @@ export default function App() {
             borderRadius: 10,
             background: "#fef2f2",
             border: "1px solid #fecaca",
-            color: "#dc2626",
+            color: "#000",
             fontSize: 13,
           }}>
             {routingError}
@@ -423,8 +434,8 @@ export default function App() {
               ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)"
               : "none",
             background: speedMode ? undefined : "#fff",
-            color: speedMode ? "#fff" : "#24364b",
-            textShadow: speedMode ? "0 1px 2px rgba(0,0,0,0.4)" : "none",
+            color: "#000",
+            textShadow: "none",
             backgroundSize: "200% 100%",
             animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
           }}
@@ -433,7 +444,7 @@ export default function App() {
         </button>
 
         {isRouting && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#000", textAlign: "center" }}>
             Calculating route…
           </div>
         )}
@@ -449,17 +460,17 @@ export default function App() {
             {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
               ({ label, value, unit }) => (
                 <div key={label} style={{ padding: "10px 12px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0" }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>{label}</div>
-                  <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#24364b" }}>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
+                  <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#000" }}>
                     {value}
-                    <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#5c6c7c" }}>{unit}</span>
+                    <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#000" }}>{unit}</span>
                   </div>
                 </div>
               )
             )}
           </div>
 
-          <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#6b7a8c", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <label style={{ display: "grid", gap: 6, fontSize: 12, color: "#000", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Routing mode
             <select
               value={routingMode}
@@ -506,7 +517,7 @@ export default function App() {
                   const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
                   const checked = activeVisibleFolders.includes(folder);
                   return (
-                    <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#24364b" }}>
+                    <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
                       <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} />
@@ -779,81 +790,172 @@ export default function App() {
         </div>
       </div>
 
-      {/* Map style switcher */}
-      <div style={{
-        position: "absolute",
-        left: 10,
-        bottom: isMobile ? 108 : 10,
-        zIndex: 2,
-        display: "flex",
-        gap: 4,
-        padding: 4,
-        borderRadius: 14,
-        background: "rgba(255,255,255,0.66)",
-        boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-        border: "1px solid rgba(15, 23, 42, 0.08)",
-        backdropFilter: "blur(18px)",
-        WebkitBackdropFilter: "blur(18px)",
-      }}>
-        {Object.entries(MAP_STYLES).map(([value, option]) => {
-          const active = mapStyle === value;
-          return (
-            <button
-              key={value}
-              onClick={() => setMapStyle(value)}
-              style={{
-                border: "none",
-                borderRadius: 11,
-                minWidth: isMobile ? 62 : 68,
-                padding: isMobile ? "8px 10px" : "8px 11px",
-                background: active ? "rgba(36,54,75,0.92)" : "rgba(255,255,255,0.44)",
-                color: active ? "#fff" : "#24364b",
-                cursor: "pointer",
-                fontSize: 12,
-                lineHeight: 1,
-                fontWeight: active ? 700 : 600,
-                boxShadow: active ? "inset 0 0 0 1px rgba(255,255,255,0.08)" : "inset 0 0 0 1px rgba(36,54,75,0.08)",
-              }}
-              title={option.label}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Location button */}
-      <button
-        onClick={locateUser}
-        title={locationState.message}
-        aria-label="Center on my location"
+      <div
+        ref={styleControlsRef}
         style={{
           position: "absolute",
-          right: 10,
+          left: 10,
           bottom: isMobile ? 108 : 10,
           zIndex: 2,
-          width: isMobile ? 42 : 40,
-          height: isMobile ? 42 : 40,
           display: "grid",
-          placeItems: "center",
-          borderRadius: 999,
-          border: "1px solid rgba(15, 23, 42, 0.08)",
-          background: locationState.status === "active" ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.6)",
-          boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          cursor: "pointer",
-          padding: 0,
+          gap: 8,
         }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          {["M12 2.75V6.1", "M12 17.9V21.25", "M2.75 12H6.1", "M17.9 12H21.25"].map((d) => (
-            <path key={d} d={d} stroke={locationState.status === "active" ? "#1d4ed8" : "#24364b"} strokeWidth="1.75" strokeLinecap="round" />
-          ))}
-          <circle cx="12" cy="12" r="5" stroke={locationState.status === "active" ? "#1d4ed8" : "#24364b"} strokeWidth="1.75" />
-          <circle cx="12" cy="12" r="1.8" fill={locationState.status === "active" ? "#1d4ed8" : "#24364b"} />
-        </svg>
-      </button>
+        {isStyleMenuOpen && (
+          <div
+            style={{
+              width: isMobile ? "min(92vw, 420px)" : 360,
+              display: "grid",
+              gap: 14,
+              padding: isMobile ? 14 : 16,
+              borderRadius: 24,
+              background:
+                "radial-gradient(circle at 12% 8%, rgba(59,130,246,0.16), transparent 42%), linear-gradient(160deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.95) 100%)",
+              border: "1px solid rgba(148, 163, 184, 0.32)",
+              boxShadow: "0 18px 40px rgba(2, 6, 23, 0.45)",
+              color: "#e2e8f0",
+            }}
+          >
+            <div style={{ fontSize: isMobile ? 30 : 34, fontWeight: 700, lineHeight: 1, textAlign: "center" }}>
+              Map Modes
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              <button
+                onClick={() => { setMapStyle("streets"); setIsStyleMenuOpen(false); }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "grid",
+                  gap: 8,
+                  color: "#e2e8f0",
+                }}
+                title={MAP_STYLES.streets.label}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    border: mapStyle === "streets" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
+                    boxShadow: mapStyle === "streets" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
+                    backgroundImage:
+                      "linear-gradient(140deg, #2b4261 0%, #3e5976 35%, #2d455f 70%, #1f2f45 100%)",
+                    position: "relative",
+                  }}
+                >
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.42, background: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(148,163,184,0.35) 14px 17px)" }} />
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.85, background: "radial-gradient(circle at 70% 35%, rgba(16,185,129,0.45), transparent 34%), radial-gradient(circle at 20% 80%, rgba(251,191,36,0.3), transparent 30%)" }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Streets</div>
+              </button>
+
+              <button
+                onClick={() => { setMapStyle("satellite"); setIsStyleMenuOpen(false); }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "grid",
+                  gap: 8,
+                  color: "#e2e8f0",
+                }}
+                title={MAP_STYLES.satellite.label}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    border: mapStyle === "satellite" ? "3px solid #38bdf8" : "1px solid rgba(148, 163, 184, 0.38)",
+                    boxShadow: mapStyle === "satellite" ? "0 0 0 2px rgba(56,189,248,0.22)" : "none",
+                    backgroundImage:
+                      "linear-gradient(130deg, #7c8f66 0%, #9aa87b 26%, #8f9d78 44%, #c6ba91 62%, #a9b89f 80%, #6d825f 100%)",
+                    position: "relative",
+                  }}
+                >
+                  <div style={{ position: "absolute", inset: 0, opacity: 0.3, background: "repeating-linear-gradient(20deg, transparent 0 12px, rgba(55,65,81,0.34) 12px 14px)" }} />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.15 }}>Satellite</div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            padding: 6,
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.9)",
+            border: "1px solid rgba(15, 23, 42, 0.08)",
+            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+          }}
+        >
+          <button
+            onClick={() => setIsStyleMenuOpen((open) => !open)}
+            aria-label="Map style options"
+            style={{
+              width: isMobile ? 44 : 42,
+              height: isMobile ? 44 : 42,
+              borderRadius: 999,
+              border: "none",
+              display: "grid",
+              placeItems: "center",
+              background: "#fff",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.75 6.25L8.95 3.6C9.29 3.43 9.69 3.43 10.03 3.6L14 5.62L18.95 3.6C19.71 3.29 20.5 3.84 20.5 4.66V17.75L15.05 20.4C14.71 20.57 14.31 20.57 13.97 20.4L10 18.38L5.05 20.4C4.29 20.71 3.5 20.16 3.5 19.34V6.75C3.5 6.54 3.61 6.35 3.75 6.25Z" fill="#24364b" />
+              <path d="M10 3.75V18.25M14 5.62V20.25" stroke="rgba(255,255,255,0.45)" strokeWidth="1.15" />
+            </svg>
+          </button>
+
+          <button
+            onClick={locateUser}
+            title={locationState.message}
+            aria-label="Center on my location"
+            style={{
+              width: isMobile ? 44 : 42,
+              height: isMobile ? 44 : 42,
+              borderRadius: 999,
+              border: "none",
+              display: "grid",
+              placeItems: "center",
+              background: "#fff",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M20 4L11 13M20 4L14.5 20L11 13L4 9.5L20 4Z"
+                stroke={locationState.status === "active" ? "#0f172a" : "#24364b"}
+                strokeWidth="1.9"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
     </>
   );
 }
+
