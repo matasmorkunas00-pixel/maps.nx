@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { MAP_STYLES, GPX_ROUTE_COLORS, ROUTING_MODES } from "../constants";
 import { nearestPointOnLine, getWaypointInsertIndex, getFilteredElevations, arePointsClose } from "../utils/geo";
@@ -934,6 +934,24 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     }
   };
 
+  const getMapViewport = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return null;
+    try {
+      const center = map.getCenter();
+      const bounds = map.getBounds();
+      return {
+        center: [center.lng, center.lat],
+        bounds: [
+          [bounds.getWest(), bounds.getSouth()],
+          [bounds.getEast(), bounds.getNorth()],
+        ],
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   return {
     distanceKm,
     elevationGainM,
@@ -948,5 +966,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     locateUser,
     routeToDestination,
     loadRouteOnMap,
+    getMapViewport,
   };
 }
