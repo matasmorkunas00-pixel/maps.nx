@@ -135,6 +135,7 @@ export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
   const gpxFileInputRef = useRef(null);
+  const quickMenuRef = useRef(null);
   const styleControlsRef = useRef(null);
   const searchBoxRef = useRef(null);
   const skipNextSearchRef = useRef(false);
@@ -147,7 +148,7 @@ export default function App() {
   const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
-  const [isGpxLibraryOpen, setIsGpxLibraryOpen] = useState(false);
+  const [activeMenuPanel, setActiveMenuPanel] = useState(null);
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [isRoutingMenuOpen, setIsRoutingMenuOpen] = useState(false);
   const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
@@ -177,6 +178,9 @@ export default function App() {
       if (!searchBoxRef.current?.contains(event.target)) {
         setIsSearchDropdownOpen(false);
       }
+      if (!quickMenuRef.current?.contains(event.target)) {
+        setActiveMenuPanel(null);
+      }
       if (!styleControlsRef.current?.contains(event.target)) {
         setIsStyleMenuOpen(false);
         setIsRoutingMenuOpen(false);
@@ -185,6 +189,10 @@ export default function App() {
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (activeMenuPanel !== "search") setIsSearchDropdownOpen(false);
+  }, [activeMenuPanel]);
 
   useEffect(() => {
     if (!isMapModesFlashOn) return;
@@ -674,6 +682,9 @@ export default function App() {
       return base.includes(year) ? base.filter((entry) => entry !== year) : [...base, year];
     });
   };
+  const toggleMenuPanel = (panelKey) => {
+    setActiveMenuPanel((current) => (current === panelKey ? null : panelKey));
+  };
 
   // ---------- UI helpers ----------
 
@@ -684,24 +695,6 @@ export default function App() {
     onTouchStart: () => setPressedButton(buttonId),
     onTouchEnd: () => setPressedButton(null),
   });
-
-  const panelStyle = {
-    position: "absolute",
-    left: 10,
-    right: isMobile ? 10 : "auto",
-    top: isMobile ? "auto" : 10,
-    bottom: isMobile ? 10 : "auto",
-    width: isMobile ? "auto" : 320,
-    maxHeight: isMobile ? "70vh" : "calc(100vh - 20px)",
-    overflowY: "auto",
-    background: "rgba(255,255,255,0.9)",
-    padding: isMobile ? 14 : 16,
-    borderRadius: 16,
-    boxShadow: "0 18px 44px rgba(15, 23, 42, 0.12)",
-    border: "1px solid rgba(15, 23, 42, 0.08)",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-    color: "#000",
-  };
 
   const btn = {
     padding: isMobile ? "12px 14px" : "10px 12px",
@@ -729,6 +722,47 @@ export default function App() {
     background: "#fff",
   };
   const activeRoutingLabel = ROUTING_MODES[routingMode]?.label || "Routing";
+  const menuIconSize = isMobile ? 46 : 44;
+  const menuIconGap = 10;
+  const expandedMenuCardStyle = {
+    width: isMobile ? "min(calc(100vw - 84px), 308px)" : 308,
+    maxHeight: isMobile ? "58vh" : "62vh",
+    overflowY: "auto",
+    padding: 12,
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.92)",
+    border: "1px solid rgba(15, 23, 42, 0.1)",
+    boxShadow: "0 14px 34px rgba(15, 23, 42, 0.16)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    animation: "quick-panel-in 0.2s ease both",
+    color: "#000",
+  };
+  const expandedMenuFloatingStyle = {
+    ...expandedMenuCardStyle,
+    position: "absolute",
+    left: menuIconSize + menuIconGap,
+    top: "50%",
+    transform: "translateY(-50%)",
+    zIndex: 5,
+    animation: "quick-panel-float-in 0.2s ease both",
+  };
+  const getMenuIconButtonStyle = (panelKey) => ({
+    width: menuIconSize,
+    height: menuIconSize,
+    borderRadius: 999,
+    border: "1px solid rgba(15, 23, 42, 0.08)",
+    display: "grid",
+    placeItems: "center",
+    background: activeMenuPanel === panelKey ? "#dbe2ec" : "rgba(255,255,255,0.92)",
+    cursor: "pointer",
+    padding: 0,
+    transition: "background-color 0.18s ease, transform 0.18s ease",
+    outline: "none",
+    boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+    WebkitTapHighlightColor: "transparent",
+    transform: activeMenuPanel === panelKey ? "scale(0.97)" : "scale(1)",
+  });
   const isStravaActivityOpen = !!selectedStravaActivity;
 
   // ---------- Render ----------
@@ -755,6 +789,7 @@ export default function App() {
         />
       </div>
 
+      <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
       <div style={{ ...panelStyle, display: isStravaActivityOpen ? "none" : undefined }}>
         <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
@@ -882,43 +917,33 @@ export default function App() {
           <button style={getButtonStyle("export")} onClick={exportGPX} {...getPressHandlers("export")}>Export GPX</button>
         </div>
 
-        <button
-          onClick={() => setSpeedMode((on) => !on)}
+      {activeMenuPanel === "route" && (
+        <div
           style={{
-            marginTop: 8,
-            width: "100%",
-            padding: isMobile ? "12px 14px" : "10px 12px",
-            borderRadius: 12,
-            border: "2px solid transparent",
-            cursor: "pointer",
-            fontSize: isMobile ? 16 : 14,
-            fontWeight: 700,
-            backgroundImage: speedMode
-              ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)"
-              : "none",
-            background: speedMode ? undefined : "#fff",
-            color: "#000",
-            textShadow: "none",
-            backgroundSize: "200% 100%",
-            animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
+            position: "absolute",
+            top: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 3,
+            width: isMobile ? "calc(100vw - 20px)" : 320,
+            pointerEvents: "none",
+            animation: "route-stats-fade-in 0.22s ease both",
           }}
         >
-          {speedMode ? "⚡ Speed Mode ON" : "Speed Mode"}
-        </button>
-
-        {isRouting && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#000", textAlign: "center" }}>
-            Calculating route…
-          </div>
-        )}
-
-        <div style={{
-          marginTop: 14,
-        }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
               ({ label, value, unit }) => (
-                <div key={label} style={{ padding: "10px 12px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0" }}>
+                <div
+                  key={label}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    background: "rgba(245,247,250,0.82)",
+                    border: "1px solid rgba(231,235,240,0.85)",
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                  }}
+                >
                   <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
                   <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#000" }}>
                     {value}
@@ -929,45 +954,256 @@ export default function App() {
             )}
           </div>
         </div>
+      )}
 
-        <ElevationChart routeGeoJson={routeGeoJson} />
-
-        {/* GPX library */}
-        <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 10 }}>
+      <div
+        ref={quickMenuRef}
+        style={{
+          position: "absolute",
+          left: 10,
+          top: "50%",
+          transform: "translateY(-50%)",
+          zIndex: 3,
+          display: "grid",
+          gap: 10,
+          alignItems: "start",
+        }}
+      >
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
           <button
-            onClick={() => setIsGpxLibraryOpen((open) => !open)}
-            style={{
-              width: "100%",
-              border: "none",
-              background: "transparent",
-              padding: "2px 0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              color: "#000",
-            }}
-            aria-expanded={isGpxLibraryOpen}
+            onClick={() => toggleMenuPanel("search")}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            aria-label="Search places"
+            style={getMenuIconButtonStyle("search")}
           >
-            <strong>GPX library</strong>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, opacity: 0.78 }}>
-              {importedRoutes.length}
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-                style={{ transform: isGpxLibraryOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s ease" }}
-              >
-                <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="#24364b" strokeWidth="1.8" />
+              <path d="M16.5 16.5L21 21" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </button>
+          {activeMenuPanel === "search" && (
+            <div style={expandedMenuFloatingStyle}>
+              <div ref={searchBoxRef} style={{ position: "relative" }}>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => {
+                    if (searchResults.length || searchQuery.trim().length >= 2) setIsSearchDropdownOpen(true);
+                  }}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search address, shops, tourist places..."
+                  style={{ ...inputStyle, width: "100%", padding: isMobile ? "12px 42px 12px 12px" : "11px 40px 11px 12px", boxSizing: "border-box" }}
+                />
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#506176",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </div>
+                {isSearchDropdownOpen && (isSearchLoading || searchResults.length > 0 || searchQuery.trim().length >= 2) && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      left: 0,
+                      right: 0,
+                      zIndex: 6,
+                      borderRadius: 12,
+                      border: "1px solid rgba(15, 23, 42, 0.12)",
+                      background: "rgba(255,255,255,0.97)",
+                      boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {isSearchLoading ? (
+                      <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>Searching places...</div>
+                    ) : searchResults.length === 0 ? (
+                      <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>No places found</div>
+                    ) : (
+                      <div style={{ maxHeight: 250, overflowY: "auto" }}>
+                        {searchResults.map((feature) => {
+                          const { primary, secondary } = getSearchResultLabels(feature);
+                          return (
+                            <button
+                              key={`${feature.id || feature.place_name}-${feature.center[0]}-${feature.center[1]}`}
+                              onClick={() => handleSearchSelect(feature)}
+                              style={{
+                                width: "100%",
+                                textAlign: "left",
+                                border: "none",
+                                background: "transparent",
+                                padding: "10px 12px",
+                                cursor: "pointer",
+                                borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+                              }}
+                            >
+                              <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>{primary}</div>
+                              {secondary && <div style={{ marginTop: 2, fontSize: 12, color: "#64748b" }}>{secondary}</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {searchError && <div style={{ marginTop: 8, fontSize: 12, color: "#b91c1c" }}>{searchError}</div>}
+            </div>
+          )}
+        </div>
 
-          {isGpxLibraryOpen && (
-            <>
-              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
+          <button
+            onClick={() => toggleMenuPanel("route")}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            aria-label="Route tools"
+            style={getMenuIconButtonStyle("route")}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="6" cy="18" r="2.2" fill="#24364b" />
+              <circle cx="18" cy="6" r="2.2" fill="#24364b" />
+              <path d="M8.2 17.1C12.8 16 10.3 8.9 15.8 7.2" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+          {activeMenuPanel === "route" && (
+            <div style={expandedMenuFloatingStyle}>
+              {routingError && (
+                <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: 12 }}>
+                  {routingError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  value={routeName}
+                  onChange={(e) => setRouteName(e.target.value)}
+                  placeholder="Route name"
+                  style={{ ...inputStyle, flex: 1, padding: isMobile ? 12 : 10 }}
+                />
+                <button style={getButtonStyle("new")} onClick={newRoute} {...getPressHandlers("new")}>New</button>
+              </div>
+              <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <button style={getButtonStyle("undo")} onClick={undoLast} {...getPressHandlers("undo")}>Undo</button>
+                <button style={getButtonStyle("clear")} onClick={clearAll} {...getPressHandlers("clear")}>Clear</button>
+                <button style={getButtonStyle("save", true)} onClick={saveRoute} disabled={isRouting} {...getPressHandlers("save")}>Save</button>
+                <button style={getButtonStyle("export")} onClick={exportGPX} {...getPressHandlers("export")}>Export GPX</button>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: "grid", gap: 5, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#475569" }}>
+                  Routing mode
+                  <select value={routingMode} onChange={(e) => setRoutingMode(e.target.value)} style={{ ...inputStyle, width: "100%", padding: 10 }}>
+                    {Object.entries(ROUTING_MODES).map(([value, opt]) => (
+                      <option key={value} value={value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {isRouting && <div style={{ marginTop: 8, fontSize: 12, color: "#334155", textAlign: "center" }}>Calculating route...</div>}
+              {routeGeoJson && <div style={{ marginTop: 8 }}><ElevationChart routeGeoJson={routeGeoJson} /></div>}
+              <div style={{ marginTop: 10, borderTop: "1px solid #e6e8ed", paddingTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <strong style={{ fontSize: 13 }}>Saved routes</strong>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>{routes.length}</span>
+                </div>
+                <div style={{ maxHeight: 170, overflow: "auto", marginTop: 6 }}>
+                  {routes.length === 0 ? (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>No saved routes yet.</div>
+                  ) : (
+                    routes.map((r) => (
+                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef1f4" }}>
+                        <button
+                          onClick={() => loadRoute(r.id)}
+                          style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 12 }}
+                          title="Load route"
+                        >
+                          <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600 }}>{r.name}</div>
+                          <div style={{ fontSize: 11, opacity: 0.68 }}>{r.distanceKm} km • {r.elevationGainM} m</div>
+                        </button>
+                        <button
+                          style={getButtonStyle(`delete_${r.id}`)}
+                          onClick={() => deleteRoute(r.id)}
+                          title="Delete route"
+                          {...getPressHandlers(`delete_${r.id}`)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
+          <button
+            onClick={() => toggleMenuPanel("speed")}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            aria-label="Speed mode"
+            style={getMenuIconButtonStyle("speed")}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M13 2L4 13H10L9 22L20 9H14L13 2Z" fill="#24364b" />
+            </svg>
+          </button>
+          {activeMenuPanel === "speed" && (
+            <div style={expandedMenuFloatingStyle}>
+              <button
+                onClick={() => setSpeedMode((on) => !on)}
+                style={{
+                  marginTop: 2,
+                  width: "100%",
+                  padding: isMobile ? "12px 14px" : "10px 12px",
+                  borderRadius: 12,
+                  border: "2px solid transparent",
+                  cursor: "pointer",
+                  fontSize: isMobile ? 16 : 14,
+                  fontWeight: 700,
+                  backgroundImage: speedMode ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)" : "none",
+                  background: speedMode ? undefined : "#fff",
+                  color: "#000",
+                  textShadow: "none",
+                  backgroundSize: "200% 100%",
+                  animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
+                }}
+              >
+                {speedMode ? "⚡ Speed Mode ON" : "Enable Speed Mode"}
+              </button>
+              <div style={{ marginTop: 8, fontSize: 12, color: "#5b6b7e" }}>
+                Speed mode keeps route logic the same and applies a colorful visual effect.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
+          <button
+            onClick={() => toggleMenuPanel("library")}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            aria-label="GPX library"
+            style={getMenuIconButtonStyle("library")}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.5 7.5C3.5 6.4 4.4 5.5 5.5 5.5H10L12 7.5H18.5C19.6 7.5 20.5 8.4 20.5 9.5V16.5C20.5 17.6 19.6 18.5 18.5 18.5H5.5C4.4 18.5 3.5 17.6 3.5 16.5V7.5Z" stroke="#24364b" strokeWidth="1.7" />
+            </svg>
+          </button>
+          {activeMenuPanel === "library" && (
+            <div style={expandedMenuFloatingStyle}>
+              <div style={{ display: "grid", gap: 8 }}>
                 <input
                   value={importFolderName}
                   onChange={(e) => setImportFolderName(e.target.value)}
@@ -978,15 +1214,13 @@ export default function App() {
                   Upload GPX files
                 </button>
               </div>
-
               {availableFolders.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                     <button style={getButtonStyle("folders_all")} onClick={() => setVisibleFolders(availableFolders)} {...getPressHandlers("folders_all")}>Show all</button>
                     <button style={getButtonStyle("folders_none")} onClick={() => setVisibleFolders([])} {...getPressHandlers("folders_none")}>Hide all</button>
                   </div>
-
-                  <div style={{ display: "grid", gap: 6, maxHeight: 140, overflow: "auto" }}>
+                  <div style={{ display: "grid", gap: 6, maxHeight: 210, overflow: "auto" }}>
                     {availableFolders.map((folder) => {
                       const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
                       const checked = activeVisibleFolders.includes(folder);
@@ -999,7 +1233,6 @@ export default function App() {
                             </span>
                             <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
                           </label>
-
                           <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
                             {folderRoutes.map((route) => (
                               <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
@@ -1025,7 +1258,7 @@ export default function App() {
               ) : (
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
               )}
-            </>
+            </div>
           )}
         </div>
 
@@ -1038,7 +1271,7 @@ export default function App() {
             </strong>
             {stravaConnected && (
               <span style={{ fontSize: 12, opacity: 0.65 }}>
-                {stravaFeatures.length ? `${filteredStravaCount} / ${stravaFeatures.length} activities` : "0 activities"}
+                {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
               </span>
             )}
           </div>
@@ -1051,7 +1284,7 @@ export default function App() {
 
           {stravaLoading && (
             <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
-              {stravaConnected ? "Loading activities…" : "Connecting…"}
+              {stravaConnected ? "Loading rides…" : "Connecting…"}
             </div>
           )}
 
@@ -1082,194 +1315,16 @@ export default function App() {
                   disabled={stravaLoading}
                   {...getPressHandlers("strava_sync")}
                 >
-                  {stravaLoading ? "Syncing…" : "Sync activities"}
+                  {stravaLoading ? "Syncing…" : "Sync rides"}
                 </button>
                 <button
                   style={getButtonStyle("strava_disconnect")}
-                  onClick={() => {
-                    closeStravaActivityModal();
-                    stravaDisconnect();
-                  }}
+                  onClick={stravaDisconnect}
                   {...getPressHandlers("strava_disconnect")}
                 >
                   Disconnect
                 </button>
               </div>
-
-              {stravaFeatures.length > 0 ? (
-                <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
-                  <div style={{ fontSize: 12, color: "#6b7a8c" }}>
-                    Showing <strong>{filteredStravaCount}</strong> of <strong>{stravaFeatures.length}</strong> activities
-                  </div>
-
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
-                        Activity types
-                      </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          style={getButtonStyle("strava_types_all")}
-                          onClick={() => setVisibleStravaTypes(availableStravaTypes)}
-                          {...getPressHandlers("strava_types_all")}
-                        >
-                          All
-                        </button>
-                        <button
-                          style={getButtonStyle("strava_types_none")}
-                          onClick={() => setVisibleStravaTypes([])}
-                          {...getPressHandlers("strava_types_none")}
-                        >
-                          None
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
-                      {availableStravaTypes.map((type) => {
-                        const checked = activeVisibleStravaTypes.includes(type);
-                        return (
-                          <label
-                            key={type}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 8,
-                              padding: "8px 10px",
-                              borderRadius: 12,
-                              background: "#f5f7fa",
-                              border: "1px solid #e7ebf0",
-                              fontSize: 13,
-                              color: "#24364b",
-                            }}
-                          >
-                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <input
-                                type="checkbox"
-                                checked={!!checked}
-                                onChange={() => toggleStravaTypeVisibility(type)}
-                              />
-                              {type}
-                            </span>
-                            <span style={{ opacity: 0.65 }}>{stravaTypeCounts[type] || 0}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
-                        Years
-                      </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          style={getButtonStyle("strava_years_all")}
-                          onClick={() => setVisibleStravaYears(availableStravaYears)}
-                          {...getPressHandlers("strava_years_all")}
-                        >
-                          All
-                        </button>
-                        <button
-                          style={getButtonStyle("strava_years_none")}
-                          onClick={() => setVisibleStravaYears([])}
-                          {...getPressHandlers("strava_years_none")}
-                        >
-                          None
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 6, maxHeight: 160, overflow: "auto" }}>
-                      {availableStravaYears.map((year) => {
-                        const checked = activeVisibleStravaYears.includes(year);
-                        return (
-                          <label
-                            key={year}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 8,
-                              padding: "8px 10px",
-                              borderRadius: 12,
-                              background: "#f5f7fa",
-                              border: "1px solid #e7ebf0",
-                              fontSize: 13,
-                              color: "#24364b",
-                            }}
-                          >
-                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <input
-                                type="checkbox"
-                                checked={!!checked}
-                                onChange={() => toggleStravaYearVisibility(year)}
-                              />
-                              {year}
-                            </span>
-                            <span style={{ opacity: 0.65 }}>{stravaYearCounts[year] || 0}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
-                        Activity list
-                      </div>
-                      <div style={{ fontSize: 12, color: "#6b7a8c" }}>{sortedFilteredStravaFeatures.length}</div>
-                    </div>
-
-                    {sortedFilteredStravaFeatures.length > 0 ? (
-                      <div style={{ display: "grid", gap: 6, maxHeight: isMobile ? 220 : 280, overflow: "auto" }}>
-                        {sortedFilteredStravaFeatures.map((feature) => {
-                          const activity = feature.properties || {};
-
-                          return (
-                            <button
-                              key={activity.id}
-                              onClick={() => openStravaActivity(feature)}
-                              style={{
-                                textAlign: "left",
-                                display: "grid",
-                                gap: 6,
-                                padding: "10px 12px",
-                                borderRadius: 12,
-                                border: "1px solid #e7ebf0",
-                                background: "#f5f7fa",
-                                cursor: "pointer",
-                              }}
-                              title="View activity stats"
-                            >
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#24364b", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {activity.name || "Unnamed activity"}
-                                </div>
-                                <div style={{ fontSize: 11, color: "#FC4C02", fontWeight: 700, flexShrink: 0 }}>
-                                  {activity.activityType || "Other"}
-                                </div>
-                              </div>
-
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "#5c6c7c" }}>
-                                <span>{formatActivityDate(activity.startDateLocal || activity.startDate)}</span>
-                                <span>{formatDistanceKm(activity.distance)}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 12, color: "#6b7a8c" }}>No activities match the current filters.</div>
-                    )}
-                  </div>
-                </div>
-              ) : !stravaLoading ? (
-                <div style={{ fontSize: 12, color: "#6b7a8c" }}>No synced activities yet.</div>
-              ) : null}
             </div>
           )}
         </div>

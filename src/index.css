@@ -69,6 +69,21 @@ button:focus-visible {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes quick-panel-in {
+  from { opacity: 0; transform: translateX(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes quick-panel-float-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+}
+
+@keyframes route-stats-fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .rainbow-marker {
   animation: rainbow-hue 1.6s linear infinite;
   cursor: pointer;

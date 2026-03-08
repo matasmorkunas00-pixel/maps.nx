@@ -16,6 +16,6 @@ export const MAP_STYLES = {
   },
   satellite: {
     label: "Satellite",
-    style: `https://api.maptiler.com/maps/satellite/style.json?key=${MAPTILER_API_KEY}`,
+    style: `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_API_KEY}`,
   },
 };
