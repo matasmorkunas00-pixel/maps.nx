@@ -9,6 +9,7 @@ import { useMap } from "./hooks/useMap";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
+const OUTDOOR_PREVIEW_URL = `https://api.maptiler.com/maps/outdoor-v2/static/25.2797,54.6872,13/160x160.png?key=${MAPTILER_API_KEY}`;
 const SEARCH_RESULT_LIMIT = 8;
 
 function normalizeMapTilerFeatures(payload) {
@@ -730,44 +731,34 @@ export default function App() {
 
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
           <button
-            onClick={() => toggleMenuPanel("speed")}
+            onClick={() => setSpeedMode((on) => !on)}
             onMouseUp={(e) => e.currentTarget.blur()}
             onTouchEnd={(e) => e.currentTarget.blur()}
             aria-label="Speed mode"
-            style={getMenuIconButtonStyle("speed")}
+            style={{
+              width: menuIconSize,
+              height: menuIconSize,
+              borderRadius: 999,
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+              padding: 0,
+              transition: "background-color 0.18s ease, transform 0.18s ease",
+              outline: "none",
+              boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+              WebkitTapHighlightColor: "transparent",
+              transform: speedMode ? "scale(0.97)" : "scale(1)",
+              background: speedMode ? undefined : "rgba(255,255,255,0.92)",
+              backgroundImage: speedMode ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)" : "none",
+              backgroundSize: speedMode ? "200% 100%" : "auto",
+              animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
+            }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M13 2L4 13H10L9 22L20 9H14L13 2Z" fill="#24364b" />
+              <path d="M13 2L4 13H10L9 22L20 9H14L13 2Z" fill={speedMode ? "#fff" : "#24364b"} />
             </svg>
           </button>
-          {activeMenuPanel === "speed" && (
-            <div style={expandedMenuFloatingStyle}>
-              <button
-                onClick={() => setSpeedMode((on) => !on)}
-                style={{
-                  marginTop: 2,
-                  width: "100%",
-                  padding: isMobile ? "12px 14px" : "10px 12px",
-                  borderRadius: 12,
-                  border: "2px solid transparent",
-                  cursor: "pointer",
-                  fontSize: isMobile ? 16 : 14,
-                  fontWeight: 700,
-                  backgroundImage: speedMode ? "linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00cc00,#0088ff,#8800ff,#ff0000)" : "none",
-                  background: speedMode ? undefined : "#fff",
-                  color: "#000",
-                  textShadow: "none",
-                  backgroundSize: "200% 100%",
-                  animation: speedMode ? "rainbow-bg 1.6s linear infinite" : "none",
-                }}
-              >
-                {speedMode ? "⚡ Speed Mode ON" : "Enable Speed Mode"}
-              </button>
-              <div style={{ marginTop: 8, fontSize: 12, color: "#5b6b7e" }}>
-                Speed mode keeps route logic the same and applies a colorful visual effect.
-              </div>
-            </div>
-          )}
         </div>
 
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
@@ -891,10 +882,10 @@ export default function App() {
         {isStyleMenuOpen && (
           <div
             style={{
-              width: isMobile ? 111 : 117,
+              width: isMobile ? 168 : 176,
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 8,
               padding: 6,
               borderRadius: 12,
               background: "rgba(255,255,255,0.94)",
@@ -941,6 +932,48 @@ export default function App() {
                 />
               </div>
               <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Default</div>
+            </button>
+
+            <button
+              onClick={() => setMapStyle("outdoor")}
+              onMouseUp={(e) => e.currentTarget.blur()}
+              onTouchEnd={(e) => e.currentTarget.blur()}
+              style={{
+                display: "grid",
+                gap: 6,
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                cursor: "pointer",
+                color: "#24364b",
+                outline: "none",
+                boxShadow: "none",
+                WebkitTapHighlightColor: "transparent",
+              }}
+              title={MAP_STYLES.outdoor.label}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: mapStyle === "outdoor" ? "2px solid #2563eb" : "1px solid rgba(15, 23, 42, 0.15)",
+                  boxShadow: mapStyle === "outdoor" ? "0 0 0 1px rgba(37,99,235,0.28)" : "none",
+                }}
+              >
+                <img
+                  src={OUTDOOR_PREVIEW_URL}
+                  alt="Outdoor map preview"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = STREETS_PREVIEW_URL;
+                  }}
+                  loading="lazy"
+                />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Cycling</div>
             </button>
 
             <button

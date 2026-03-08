@@ -94,6 +94,220 @@ function applySatelliteGoogleLikeTone(map, mapStyle) {
   });
 }
 
+function applyGaiaLikeOutdoorTone(map, mapStyle) {
+  if (mapStyle !== "outdoor") return;
+  const layers = map.getStyle()?.layers || [];
+  if (!layers.length) return;
+
+  const reservedLayers = new Set(["route", "route-hit-area", "imported-routes", "strava-routes"]);
+  const layerKey = (layer) => `${layer.id} ${layer["source-layer"] || ""}`.toLowerCase();
+
+  const trySetPaint = (layerId, prop, value) => {
+    try {
+      map.setPaintProperty(layerId, prop, value);
+    } catch {
+      // Ignore layers that do not support the paint property.
+    }
+  };
+  const trySetLayout = (layerId, prop, value) => {
+    try {
+      map.setLayoutProperty(layerId, prop, value);
+    } catch {
+      // Ignore layers that do not support the layout property.
+    }
+  };
+
+  const setLineWidth = (layerId, min = 0.8, max = 2.2) => {
+    trySetPaint(layerId, "line-width", ["interpolate", ["linear"], ["zoom"], 10, min, 16, max]);
+  };
+
+  const setTextColor = (layerId, color, halo = "rgba(255,255,255,0.92)") => {
+    trySetPaint(layerId, "text-color", color);
+    trySetPaint(layerId, "text-halo-color", halo);
+    trySetPaint(layerId, "text-halo-width", 1.1);
+  };
+
+  layers.forEach((layer) => {
+    if (reservedLayers.has(layer.id)) return;
+
+    const searchable = layerKey(layer);
+
+    if (layer.type === "background") {
+      trySetPaint(layer.id, "background-color", "#e8eedb");
+      return;
+    }
+
+    if (layer.type === "raster") {
+      if (searchable.includes("hillshade") || searchable.includes("terrain")) {
+        trySetPaint(layer.id, "raster-opacity", 0.26);
+      }
+      return;
+    }
+
+    if (layer.type === "fill") {
+      if (searchable.includes("water")) {
+        trySetPaint(layer.id, "fill-color", "#c9deea");
+        trySetPaint(layer.id, "fill-opacity", 0.9);
+        return;
+      }
+
+      if (
+        searchable.includes("park") ||
+        searchable.includes("forest") ||
+        searchable.includes("wood") ||
+        searchable.includes("landcover") ||
+        searchable.includes("landuse") ||
+        searchable.includes("grass") ||
+        searchable.includes("meadow")
+      ) {
+        trySetPaint(layer.id, "fill-color", "#e0ead6");
+        trySetPaint(layer.id, "fill-opacity", 0.92);
+        return;
+      }
+
+      if (searchable.includes("building")) {
+        trySetPaint(layer.id, "fill-color", "#d9d8cf");
+        trySetPaint(layer.id, "fill-opacity", 0.48);
+        return;
+      }
+    }
+
+    if (layer.type === "symbol") {
+      const isNoiseLayer =
+        searchable.includes("poi") ||
+        searchable.includes("housenumber") ||
+        searchable.includes("transit") ||
+        searchable.includes("bus") ||
+        searchable.includes("rail_station") ||
+        searchable.includes("amenity") ||
+        searchable.includes("aeroway");
+
+      if (isNoiseLayer) {
+        trySetLayout(layer.id, "visibility", "none");
+        return;
+      }
+
+      trySetLayout(layer.id, "visibility", "visible");
+
+      if (searchable.includes("road")) {
+        setTextColor(layer.id, "#576066");
+        trySetPaint(layer.id, "text-opacity", 0.74);
+        return;
+      }
+
+      if (searchable.includes("water")) {
+        setTextColor(layer.id, "#587a92");
+        trySetPaint(layer.id, "text-opacity", 0.72);
+        return;
+      }
+
+      if (searchable.includes("place") || searchable.includes("country") || searchable.includes("city")) {
+        setTextColor(layer.id, "#4f575d");
+        trySetPaint(layer.id, "text-opacity", 0.8);
+        return;
+      }
+      return;
+    }
+
+    if (layer.type !== "line") return;
+
+    const isCycleway =
+      searchable.includes("cycleway") ||
+      searchable.includes("bicycle") ||
+      searchable.includes("bike") ||
+      searchable.includes("cycling") ||
+      searchable.includes("velo") ||
+      searchable.includes("mtb");
+    const isTrailLike =
+      searchable.includes("trail") ||
+      searchable.includes("path") ||
+      searchable.includes("track") ||
+      searchable.includes("footway") ||
+      searchable.includes("bridleway") ||
+      searchable.includes("hiking");
+    const isSecondaryRoad = searchable.includes("secondary") || searchable.includes("primary");
+    const isMinorRoad =
+      searchable.includes("residential") ||
+      searchable.includes("service") ||
+      searchable.includes("living_street") ||
+      searchable.includes("tertiary") ||
+      searchable.includes("unclassified");
+    const isMajorRoad = searchable.includes("motorway") || searchable.includes("trunk");
+    const isWaterLine =
+      searchable.includes("waterway") ||
+      searchable.includes("river") ||
+      searchable.includes("stream") ||
+      searchable.includes("canal");
+    const isBoundary = searchable.includes("boundary") || searchable.includes("admin");
+    const isRail = searchable.includes("rail");
+    const isContour = searchable.includes("contour");
+
+    if (isCycleway) {
+      trySetPaint(layer.id, "line-color", "#2cae76");
+      trySetPaint(layer.id, "line-opacity", 0.98);
+      setLineWidth(layer.id, 1.2, 3.6);
+      return;
+    }
+
+    if (isTrailLike) {
+      trySetPaint(layer.id, "line-color", "#737781");
+      trySetPaint(layer.id, "line-opacity", 0.84);
+      setLineWidth(layer.id, 0.65, 1.45);
+      trySetPaint(layer.id, "line-dasharray", [2.7, 2.1]);
+      return;
+    }
+
+    if (isMajorRoad) {
+      trySetPaint(layer.id, "line-color", "#e3ab45");
+      trySetPaint(layer.id, "line-opacity", 0.96);
+      setLineWidth(layer.id, 1.8, 4.9);
+      return;
+    }
+
+    if (isSecondaryRoad) {
+      trySetPaint(layer.id, "line-color", "#e7cb76");
+      trySetPaint(layer.id, "line-opacity", 0.93);
+      setLineWidth(layer.id, 1.3, 3.8);
+      return;
+    }
+
+    if (isMinorRoad) {
+      trySetPaint(layer.id, "line-color", "#bddb7a");
+      trySetPaint(layer.id, "line-opacity", 0.88);
+      setLineWidth(layer.id, 0.95, 2.4);
+      return;
+    }
+
+    if (isWaterLine) {
+      trySetPaint(layer.id, "line-color", "#78b4d8");
+      trySetPaint(layer.id, "line-opacity", 0.86);
+      setLineWidth(layer.id, 0.75, 1.8);
+      return;
+    }
+
+    if (isRail) {
+      trySetPaint(layer.id, "line-color", "#8d8e91");
+      trySetPaint(layer.id, "line-opacity", 0.46);
+      setLineWidth(layer.id, 0.7, 1.6);
+      return;
+    }
+
+    if (isBoundary) {
+      trySetPaint(layer.id, "line-color", "#9ca19a");
+      trySetPaint(layer.id, "line-opacity", 0.34);
+      setLineWidth(layer.id, 0.5, 1.0);
+      trySetPaint(layer.id, "line-dasharray", [1.4, 1.2]);
+      return;
+    }
+
+    if (isContour) {
+      trySetPaint(layer.id, "line-color", "#ab9b76");
+      trySetPaint(layer.id, "line-opacity", 0.3);
+      setLineWidth(layer.id, 0.4, 0.9);
+    }
+  });
+}
+
 function removeLayerAndSource(map, layerId, sourceId) {
   if (map.getLayer(layerId)) map.removeLayer(layerId);
   if (sourceId && map.getSource(sourceId)) map.removeSource(sourceId);
@@ -431,6 +645,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       map.on("zoom", syncAppleBasemapCamera);
       map.on("resize", syncAppleBasemapCamera);
       addImportedLayer(map, importedGeoJsonRef.current);
+      if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
+      applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
 
         map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
@@ -550,6 +766,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
+      const strava = stravaGeoJsonRef.current;
+      if (strava?.features?.length) addStravaLayer(map, strava);
+      applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
     });
   }, [appleMapContainerRef, mapStyle, appleMapReady]);

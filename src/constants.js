@@ -14,6 +14,10 @@ export const MAP_STYLES = {
     label: "Streets",
     style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_API_KEY}`,
   },
+  outdoor: {
+    label: "Cycling",
+    style: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${MAPTILER_API_KEY}`,
+  },
   satellite: {
     label: "Satellite",
     style: `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_API_KEY}`,
