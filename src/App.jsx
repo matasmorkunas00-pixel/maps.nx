@@ -150,7 +150,6 @@ export default function App() {
   const [speedMode, setSpeedMode] = useState(false);
   const [activeMenuPanel, setActiveMenuPanel] = useState(null);
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
-  const [isRoutingMenuOpen, setIsRoutingMenuOpen] = useState(false);
   const [visibleStravaTypes, setVisibleStravaTypes] = useState(null);
   const [visibleStravaYears, setVisibleStravaYears] = useState(null);
   const [selectedStravaActivity, setSelectedStravaActivity] = useState(null);
@@ -183,7 +182,6 @@ export default function App() {
       }
       if (!styleControlsRef.current?.contains(event.target)) {
         setIsStyleMenuOpen(false);
-        setIsRoutingMenuOpen(false);
       }
     };
     window.addEventListener("pointerdown", onPointerDown);
@@ -496,6 +494,13 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedStravaActivity]);
 
+  useEffect(() => {
+    if (!stravaConnected && selectedStravaActivity) {
+      setSelectedStravaActivity(null);
+      setIsStravaActivityLoading(false);
+    }
+  }, [stravaConnected, selectedStravaActivity]);
+
   const closeStravaActivityModal = () => {
     setSelectedStravaActivity(null);
     setIsStravaActivityLoading(false);
@@ -721,7 +726,6 @@ export default function App() {
     color: "#000",
     background: "#fff",
   };
-  const activeRoutingLabel = ROUTING_MODES[routingMode]?.label || "Routing";
   const menuIconSize = isMobile ? 46 : 44;
   const menuIconGap = 10;
   const expandedMenuCardStyle = {
@@ -763,7 +767,7 @@ export default function App() {
     WebkitTapHighlightColor: "transparent",
     transform: activeMenuPanel === panelKey ? "scale(0.97)" : "scale(1)",
   });
-  const isStravaActivityOpen = !!selectedStravaActivity;
+  const isStravaActivityOpen = !!selectedStravaActivity && stravaConnected;
 
   // ---------- Render ----------
 
@@ -838,7 +842,7 @@ export default function App() {
           top: "50%",
           transform: "translateY(-50%)",
           zIndex: 3,
-          display: "grid",
+          display: isStravaActivityOpen ? "none" : "grid",
           gap: 10,
           alignItems: "start",
         }}
@@ -985,38 +989,6 @@ export default function App() {
               </div>
               {isRouting && <div style={{ marginTop: 8, fontSize: 12, color: "#334155", textAlign: "center" }}>Calculating route...</div>}
               {routeGeoJson && <div style={{ marginTop: 8 }}><ElevationChart routeGeoJson={routeGeoJson} /></div>}
-              <div style={{ marginTop: 10, borderTop: "1px solid #e6e8ed", paddingTop: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong style={{ fontSize: 13 }}>Saved routes</strong>
-                  <span style={{ fontSize: 12, opacity: 0.7 }}>{routes.length}</span>
-                </div>
-                <div style={{ maxHeight: 170, overflow: "auto", marginTop: 6 }}>
-                  {routes.length === 0 ? (
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>No saved routes yet.</div>
-                  ) : (
-                    routes.map((r) => (
-                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef1f4" }}>
-                        <button
-                          onClick={() => loadRoute(r.id)}
-                          style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 12 }}
-                          title="Load route"
-                        >
-                          <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600 }}>{r.name}</div>
-                          <div style={{ fontSize: 11, opacity: 0.68 }}>{r.distanceKm} km • {r.elevationGainM} m</div>
-                        </button>
-                        <button
-                          style={getButtonStyle(`delete_${r.id}`)}
-                          onClick={() => deleteRoute(r.id)}
-                          title="Delete route"
-                          {...getPressHandlers(`delete_${r.id}`)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -1132,121 +1104,107 @@ export default function App() {
               ) : (
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
               )}
-            </div>
-          )}
-        </div>
+              <div style={{ marginTop: 10, borderTop: "1px solid #e6e8ed", paddingTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <strong style={{ fontSize: 13 }}>Saved routes</strong>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>{routes.length}</span>
+                </div>
+                <div style={{ maxHeight: 170, overflow: "auto", marginTop: 6 }}>
+                  {routes.length === 0 ? (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>No saved routes yet.</div>
+                  ) : (
+                    routes.map((r) => (
+                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef1f4" }}>
+                        <button
+                          onClick={() => loadRoute(r.id)}
+                          style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 12 }}
+                          title="Load route"
+                        >
+                          <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600 }}>{r.name}</div>
+                          <div style={{ fontSize: 11, opacity: 0.68 }}>{r.distanceKm} km • {r.elevationGainM} m</div>
+                        </button>
+                        <button
+                          style={getButtonStyle(`delete_${r.id}`)}
+                          onClick={() => deleteRoute(r.id)}
+                          title="Delete route"
+                          {...getPressHandlers(`delete_${r.id}`)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop: 10, borderTop: "1px solid #e6e8ed", paddingTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+                    Strava
+                  </strong>
+                  {stravaConnected && (
+                    <span style={{ fontSize: 12, opacity: 0.65 }}>
+                      {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
+                    </span>
+                  )}
+                </div>
 
-        {/* Strava */}
-        <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#FC4C02" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
-              Strava
-            </strong>
-            {stravaConnected && (
-              <span style={{ fontSize: 12, opacity: 0.65 }}>
-                {stravaActivitiesGeoJson ? `${stravaActivitiesGeoJson.features.length} rides` : "0 rides"}
-              </span>
-            )}
-          </div>
+                {stravaError && (
+                  <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 12 }}>
+                    {stravaError}
+                  </div>
+                )}
 
-          {stravaError && (
-            <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 12 }}>
-              {stravaError}
-            </div>
-          )}
+                {stravaLoading && (
+                  <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
+                    {stravaConnected ? "Loading rides…" : "Connecting…"}
+                  </div>
+                )}
 
-          {stravaLoading && (
-            <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7a8c", textAlign: "center" }}>
-              {stravaConnected ? "Loading rides…" : "Connecting…"}
-            </div>
-          )}
-
-          {!stravaConnected ? (
-            <button
-              style={{
-                ...getButtonStyle("strava_connect"),
-                width: "100%",
-                background: pressedButton === "strava_connect" ? "#e34200" : "#FC4C02",
-                color: "#fff",
-                border: "none",
-                fontWeight: 600,
-              }}
-              onClick={stravaConnect}
-              {...getPressHandlers("strava_connect")}
-            >
-              Connect Strava
-            </button>
-          ) : (
-            <div style={{ display: "grid", gap: 6 }}>
-              {stravaAthleteName && (
-                <div style={{ fontSize: 12, color: "#6b7a8c" }}>Connected as <strong>{stravaAthleteName}</strong></div>
-              )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
-                <button
-                  style={{ ...getButtonStyle("strava_sync"), fontWeight: 600 }}
-                  onClick={stravaLoadActivities}
-                  disabled={stravaLoading}
-                  {...getPressHandlers("strava_sync")}
-                >
-                  {stravaLoading ? "Syncing…" : "Sync rides"}
-                </button>
-                <button
-                  style={getButtonStyle("strava_disconnect")}
-                  onClick={stravaDisconnect}
-                  {...getPressHandlers("strava_disconnect")}
-                >
-                  Disconnect
-                </button>
+                {!stravaConnected ? (
+                  <button
+                    style={{
+                      ...getButtonStyle("strava_connect"),
+                      width: "100%",
+                      background: pressedButton === "strava_connect" ? "#e34200" : "#FC4C02",
+                      color: "#fff",
+                      border: "none",
+                      fontWeight: 600,
+                    }}
+                    onClick={stravaConnect}
+                    {...getPressHandlers("strava_connect")}
+                  >
+                    Connect Strava
+                  </button>
+                ) : (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {stravaAthleteName && (
+                      <div style={{ fontSize: 12, color: "#6b7a8c" }}>Connected as <strong>{stravaAthleteName}</strong></div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+                      <button
+                        style={{ ...getButtonStyle("strava_sync"), fontWeight: 600 }}
+                        onClick={stravaLoadActivities}
+                        disabled={stravaLoading}
+                        {...getPressHandlers("strava_sync")}
+                      >
+                        {stravaLoading ? "Syncing…" : "Sync rides"}
+                      </button>
+                      <button
+                        style={getButtonStyle("strava_disconnect")}
+                        onClick={stravaDisconnect}
+                        {...getPressHandlers("strava_disconnect")}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Saved routes */}
-        <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <strong>Saved routes</strong>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>{routes.length}</span>
-          </div>
-
-          <div style={{ maxHeight: isMobile ? 180 : 220, overflow: "auto", marginTop: 8 }}>
-            {routes.length === 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.7 }}>No saved routes yet.</div>
-            ) : (
-              routes.map((r) => (
-                <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f2f2f2" }}>
-                  <button
-                    onClick={() => loadRoute(r.id)}
-                    style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: isMobile ? 15 : 13 }}
-                    title="Load route"
-                  >
-                    <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600 }}>{r.name}</div>
-                    <div style={{ fontSize: 11, opacity: 0.7 }}>{r.distanceKm} km • {r.elevationGainM} m</div>
-                  </button>
-
-                  <button
-                    style={getButtonStyle(`rename_${r.id}`)}
-                    onClick={() => { setRouteName(r.name); setActiveRouteId(r.id); }}
-                    title="Load name into editor, then Save to apply"
-                    {...getPressHandlers(`rename_${r.id}`)}
-                  >
-                    Rename
-                  </button>
-
-                  <button
-                    style={getButtonStyle(`delete_${r.id}`)}
-                    onClick={() => deleteRoute(r.id)}
-                    title="Delete route"
-                    {...getPressHandlers(`delete_${r.id}`)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
 
       <div
@@ -1355,55 +1313,6 @@ export default function App() {
           </div>
         )}
 
-        {isRoutingMenuOpen && (
-          <div
-            style={{
-              minWidth: isMobile ? 152 : 164,
-              display: "grid",
-              gap: 4,
-              padding: 6,
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.82)",
-              border: "1px solid rgba(15, 23, 42, 0.1)",
-              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.16)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              transformOrigin: "left bottom",
-              animation: "routing-menu-in 0.18s ease both",
-            }}
-          >
-            {Object.entries(ROUTING_MODES).filter(([value]) => value !== routingMode).map(([value, opt]) => {
-              return (
-                <button
-                  key={value}
-                  onClick={() => {
-                    setRoutingMode(value);
-                    setIsRoutingMenuOpen(false);
-                  }}
-                  onMouseUp={(e) => e.currentTarget.blur()}
-                  onTouchEnd={(e) => e.currentTarget.blur()}
-                  style={{
-                    border: "none",
-                    borderRadius: 8,
-                    background: "transparent",
-                    color: "#000",
-                    textAlign: "left",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    padding: "8px 10px",
-                    cursor: "pointer",
-                    outline: "none",
-                    boxShadow: "none",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         <div
           style={{
             display: "flex",
@@ -1413,7 +1322,6 @@ export default function App() {
           <button
             onClick={() => {
               setIsMapModesFlashOn(true);
-              setIsRoutingMenuOpen(false);
               setIsStyleMenuOpen((open) => !open);
             }}
             onMouseUp={(e) => e.currentTarget.blur()}
@@ -1445,7 +1353,6 @@ export default function App() {
             onClick={() => {
               setIsLocationFlashOn(true);
               setIsStyleMenuOpen(false);
-              setIsRoutingMenuOpen(false);
               locateUser();
             }}
             onMouseUp={(e) => e.currentTarget.blur()}
@@ -1479,46 +1386,6 @@ export default function App() {
             </svg>
           </button>
 
-          <button
-            onClick={() => {
-              setIsStyleMenuOpen(false);
-              setIsRoutingMenuOpen((open) => !open);
-            }}
-            onMouseUp={(e) => e.currentTarget.blur()}
-            onTouchEnd={(e) => e.currentTarget.blur()}
-            aria-label="Routing mode options"
-            style={{
-              minWidth: isMobile ? 118 : 126,
-              height: isMobile ? 44 : 42,
-              borderRadius: 12,
-              border: "1px solid rgba(15, 23, 42, 0.08)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              background: isRoutingMenuOpen ? "#dbe2ec" : "rgba(255,255,255,0.92)",
-              cursor: "pointer",
-              padding: "0 12px",
-              transition: "background-color 0.2s ease",
-              outline: "none",
-              boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-              WebkitTapHighlightColor: "transparent",
-              color: "#000",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            <span style={{ whiteSpace: "nowrap" }}>{activeRoutingLabel}</span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              style={{ transform: isRoutingMenuOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.18s ease" }}
-            >
-              <path d="M6 9L12 15L18 9" stroke="#24364b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
         </div>
       </div>
 
