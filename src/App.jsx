@@ -1480,9 +1480,6 @@ export default function App() {
                       Upload, sort, and manage route folders.
                     </span>
                   </div>
-                  <span style={getLibraryBadgeStyle(isCloudLibraryActive ? "active" : "local")}>
-                    {isCloudLibraryActive ? "Cloud" : "Local"}
-                  </span>
                 </div>
 
                 <div style={librarySectionStyle}>
@@ -1579,12 +1576,6 @@ export default function App() {
                   >
                     Upload GPX
                   </button>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                      Default folder
-                    </span>
-                    <span style={getLibraryBadgeStyle("neutral")}>Imported</span>
-                  </div>
                 </div>
 
                 {libraryMessage && (
