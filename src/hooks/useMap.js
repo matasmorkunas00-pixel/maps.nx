@@ -29,25 +29,6 @@ const IMPORTED_PAINT = {
   "line-opacity": 0.72,
 };
 const STRAVA_PAINT = { "line-color": "#FC4C02", "line-width": 2, "line-opacity": 0.65 };
-const COUNTRY_BORDERS_URL = "https://cdn.jsdelivr.net/gh/datasets/geo-countries@master/data/countries.geojson";
-
-function getCountryBorderHaloPaint(mapStyle) {
-  const isSatellite = mapStyle === "satellite";
-  return {
-    "line-color": isSatellite ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)",
-    "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.6, 4, 1.1, 8, 1.6],
-    "line-opacity": isSatellite ? 0.7 : 0.55,
-  };
-}
-
-function getCountryBorderLinePaint(mapStyle) {
-  const isSatellite = mapStyle === "satellite";
-  return {
-    "line-color": isSatellite ? "rgba(70,85,104,0.96)" : "rgba(92,108,130,0.95)",
-    "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.35, 4, 0.7, 8, 1.1],
-    "line-opacity": isSatellite ? 0.95 : 0.85,
-  };
-}
 
 function ensureSource(map, id, data) {
   if (!map.getSource(id)) {
@@ -77,23 +58,47 @@ function addStravaLayer(map, geojson) {
   }
 }
 
-function addCountryBordersLayer(map, mapStyle) {
-  if (ensureSource(map, "country-borders", COUNTRY_BORDERS_URL)) {
-    map.addLayer({
-      id: "country-borders-halo",
-      type: "line",
-      source: "country-borders",
-      paint: getCountryBorderHaloPaint(mapStyle),
-      layout: { "line-join": "round", "line-cap": "round" },
-    });
-    map.addLayer({
-      id: "country-borders",
-      type: "line",
-      source: "country-borders",
-      paint: getCountryBorderLinePaint(mapStyle),
-      layout: { "line-join": "round", "line-cap": "round" },
-    });
-  }
+function applySatelliteGoogleLikeTone(map, mapStyle) {
+  if (mapStyle !== "satellite") return;
+  const layers = map.getStyle()?.layers || [];
+  if (!layers.length) return;
+
+  // Subtle global raster tuning to get closer to Google-like satellite tones.
+  const rasterLayers = layers.filter((layer) => layer.type === "raster");
+  rasterLayers.forEach((layer) => {
+    try {
+      map.setPaintProperty(layer.id, "raster-saturation", 0.1);
+      map.setPaintProperty(layer.id, "raster-contrast", 0.06);
+      map.setPaintProperty(layer.id, "raster-brightness-min", 0.02);
+      map.setPaintProperty(layer.id, "raster-brightness-max", 1.03);
+    } catch {
+      // Ignore raster layers without these paint properties.
+    }
+  });
+
+  const oceanLayers = layers.filter((layer) => {
+    const searchable = `${layer.id} ${layer["source-layer"] || ""}`.toLowerCase();
+    return (layer.type === "fill" || layer.type === "line") && (searchable.includes("ocean") || searchable.includes("sea"));
+  });
+
+  const waterLayers = oceanLayers.length ? oceanLayers : layers.filter((layer) => {
+    const searchable = `${layer.id} ${layer["source-layer"] || ""}`.toLowerCase();
+    return (layer.type === "fill" || layer.type === "line") && searchable.includes("water");
+  });
+
+  waterLayers.forEach((layer) => {
+    try {
+      if (layer.type === "fill") {
+        map.setPaintProperty(layer.id, "fill-color", "#4b67af");
+        map.setPaintProperty(layer.id, "fill-opacity", 0.34);
+      } else if (layer.type === "line") {
+        map.setPaintProperty(layer.id, "line-color", "#5a78bc");
+        map.setPaintProperty(layer.id, "line-opacity", 0.42);
+      }
+    } catch {
+      // Ignore layers without these paint properties.
+    }
+  });
 }
 
 function removeLayerAndSource(map, layerId, sourceId) {
@@ -431,12 +436,12 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
     // --- Map events ---
     map.on("load", () => {
-      addCountryBordersLayer(map, mapStyle);
       map.on("move", syncAppleBasemapCamera);
       map.on("zoom", syncAppleBasemapCamera);
       map.on("resize", syncAppleBasemapCamera);
       addImportedLayer(map, importedGeoJsonRef.current);
       if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
+      applySatelliteGoogleLikeTone(map, mapStyle);
 
         map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
@@ -552,12 +557,12 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           new appleMapKitRef.current.CoordinateSpan(latDelta, lngDelta)
         );
       }
-      addCountryBordersLayer(map, mapStyle);
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
       const strava = stravaGeoJsonRef.current;
       if (strava?.features?.length) addStravaLayer(map, strava);
+      applySatelliteGoogleLikeTone(map, mapStyle);
     });
   }, [appleMapContainerRef, mapStyle, appleMapReady]);
 
