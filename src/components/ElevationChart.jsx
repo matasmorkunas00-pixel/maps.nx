@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { getFilteredElevations } from "../utils/geo";
 
-export function ElevationChart({ routeGeoJson }) {
+export function ElevationChart({ routeGeoJson, width: chartWidth }) {
   const coords = routeGeoJson?.features?.[0]?.geometry?.coordinates;
 
   const data = useMemo(() => {
@@ -33,7 +33,7 @@ export function ElevationChart({ routeGeoJson }) {
 
   if (!data) return null;
 
-  const width = 280;
+  const width = chartWidth || 280;
   const height = 80;
   const pad = 6;
   const rangeE = Math.max(1, data.maxE - data.minE);
@@ -48,12 +48,12 @@ export function ElevationChart({ routeGeoJson }) {
     .join(" ");
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.8 }}>
         <span>{Math.round(data.minE)} m</span>
         <span>{Math.round(data.maxE)} m</span>
       </div>
-      <svg width={width} height={height} style={{ display: "block", background: "#f6f6f6", borderRadius: 8 }}>
+      <svg width={width} height={height} style={{ display: "block", borderRadius: 8 }}>
         <path d={path} fill="none" stroke="#111" strokeWidth="2" />
       </svg>
     </div>
