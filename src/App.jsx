@@ -87,6 +87,50 @@ function formatActivityDate(dateString) {
   });
 }
 
+function formatHeartRate(bpm) {
+  if (!Number.isFinite(bpm)) return "-";
+  return `${Math.round(bpm)} bpm`;
+}
+
+function sampleSeries(values, maxPoints = 72) {
+  if (!Array.isArray(values) || values.length <= maxPoints) return values;
+  const step = values.length / maxPoints;
+  return Array.from({ length: maxPoints }, (_, index) => values[Math.min(values.length - 1, Math.floor(index * step))]);
+}
+
+function buildSparkline(values, width = 320, height = 112, padding = 10) {
+  if (!Array.isArray(values) || values.length < 2) return null;
+
+  const sampled = sampleSeries(values, 72);
+  const minValue = Math.min(...sampled);
+  const maxValue = Math.max(...sampled);
+  const domainMin = Math.min(minValue, 90);
+  const domainMax = Math.max(maxValue, domainMin + 20);
+  const range = Math.max(domainMax - domainMin, 1);
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+
+  const points = sampled.map((value, index) => {
+    const x = padding + (innerWidth * index) / Math.max(sampled.length - 1, 1);
+    const y = height - padding - ((value - domainMin) / range) * innerHeight;
+    return [x, y];
+  });
+
+  const linePath = points
+    .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${points[points.length - 1][0].toFixed(2)},${(height - padding).toFixed(2)} L${points[0][0].toFixed(2)},${(height - padding).toFixed(2)} Z`;
+
+  return {
+    linePath,
+    areaPath,
+    minValue,
+    maxValue,
+    latestValue: sampled[sampled.length - 1],
+    averageValue: sampled.reduce((sum, value) => sum + value, 0) / sampled.length,
+  };
+}
+
 export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -398,25 +442,31 @@ export default function App() {
   const selectedStravaStats = useMemo(() => {
     if (!selectedStravaActivity) return [];
 
-    const stats = [
+    return [
       { label: "Distance", value: formatDistanceKm(selectedStravaActivity.distance) },
       { label: "Moving time", value: formatDuration(selectedStravaActivity.moving_time) },
       { label: "Elapsed time", value: formatDuration(selectedStravaActivity.elapsedTime) },
       { label: "Elevation", value: formatMeters(selectedStravaActivity.totalElevationGain) },
       { label: "Avg speed", value: formatSpeed(selectedStravaActivity.averageSpeed) },
       { label: "Max speed", value: formatSpeed(selectedStravaActivity.maxSpeed) },
-      { label: "Avg heart rate", value: Number.isFinite(selectedStravaActivity.averageHeartrate) ? `${Math.round(selectedStravaActivity.averageHeartrate)} bpm` : "-" },
-      { label: "Max heart rate", value: Number.isFinite(selectedStravaActivity.maxHeartrate) ? `${Math.round(selectedStravaActivity.maxHeartrate)} bpm` : "-" },
-      { label: "Calories", value: Number.isFinite(selectedStravaActivity.calories) ? formatNumber(selectedStravaActivity.calories) : "-" },
-      { label: "Kudos", value: Number.isFinite(selectedStravaActivity.kudosCount) ? formatNumber(selectedStravaActivity.kudosCount) : "-" },
-      { label: "Achievements", value: Number.isFinite(selectedStravaActivity.achievementCount) ? formatNumber(selectedStravaActivity.achievementCount) : "-" },
-      { label: "Photos", value: Number.isFinite(selectedStravaActivity.totalPhotoCount) ? formatNumber(selectedStravaActivity.totalPhotoCount) : "-" },
-      { label: "Avg watts", value: Number.isFinite(selectedStravaActivity.averageWatts) ? `${Math.round(selectedStravaActivity.averageWatts)} W` : "-" },
-      { label: "Energy", value: Number.isFinite(selectedStravaActivity.kilojoules) ? `${formatNumber(selectedStravaActivity.kilojoules)} kJ` : "-" },
     ];
-
-    return stats.filter((stat) => stat.value !== "-");
   }, [selectedStravaActivity]);
+  const selectedStravaDescription = selectedStravaActivity?.description?.trim() || "";
+  const selectedStravaHeartrateStream = useMemo(() => {
+    if (!Array.isArray(selectedStravaActivity?.heartrateStream)) return [];
+    return selectedStravaActivity.heartrateStream.filter((value) => Number.isFinite(value));
+  }, [selectedStravaActivity]);
+  const selectedStravaHeartRateChart = useMemo(
+    () => buildSparkline(selectedStravaHeartrateStream),
+    [selectedStravaHeartrateStream]
+  );
+  const selectedStravaAverageHeartRate = Number.isFinite(selectedStravaActivity?.averageHeartrate)
+    ? selectedStravaActivity.averageHeartrate
+    : selectedStravaHeartRateChart?.averageValue ?? null;
+  const selectedStravaMaxHeartRate = Number.isFinite(selectedStravaActivity?.maxHeartrate)
+    ? selectedStravaActivity.maxHeartrate
+    : selectedStravaHeartRateChart?.maxValue ?? null;
+  const selectedStravaLatestHeartRate = selectedStravaHeartRateChart?.latestValue ?? null;
 
   const selectedStravaPrimaryPhotoUrl = useMemo(() => {
     const urls = selectedStravaActivity?.primaryPhotoUrls;
@@ -436,6 +486,7 @@ export default function App() {
         imageUrl: selectedStravaPrimaryPhotoUrl,
         totalPhotoCount,
         progress: 0.52,
+        showCountBadge: false,
       },
     ];
   }, [selectedStravaActivity, selectedStravaPrimaryPhotoUrl]);
@@ -694,6 +745,7 @@ export default function App() {
     background: "#fff",
   };
   const activeRoutingLabel = ROUTING_MODES[routingMode]?.label || "Routing";
+  const isStravaActivityOpen = !!selectedStravaActivity;
 
   // ---------- Render ----------
 
@@ -719,7 +771,7 @@ export default function App() {
         />
       </div>
 
-      <div style={panelStyle}>
+      <div style={{ ...panelStyle, display: isStravaActivityOpen ? "none" : undefined }}>
         <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
         <div ref={searchBoxRef} style={{ position: "relative", marginBottom: 10 }}>
@@ -1291,7 +1343,7 @@ export default function App() {
           left: 10,
           bottom: isMobile ? 108 : 10,
           zIndex: 2,
-          display: "grid",
+          display: isStravaActivityOpen ? "none" : "grid",
           gap: 8,
         }}
       >
@@ -1563,29 +1615,29 @@ export default function App() {
             position: "fixed",
             zIndex: 30,
             pointerEvents: "none",
-            top: isMobile ? "auto" : 88,
-            right: isMobile ? 12 : 18,
+            top: isMobile ? "auto" : 18,
+            left: isMobile ? 12 : 18,
             bottom: 12,
-            left: isMobile ? 12 : "auto",
+            right: isMobile ? 12 : "auto",
             display: "flex",
             alignItems: isMobile ? "flex-end" : "flex-start",
-            justifyContent: isMobile ? "center" : "flex-end",
+            justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
           <div
             style={{
               pointerEvents: "auto",
               width: "100%",
-              maxWidth: isMobile ? "100%" : 340,
-              maxHeight: isMobile ? "46vh" : "calc(100vh - 112px)",
+              maxWidth: isMobile ? "100%" : 376,
+              maxHeight: isMobile ? "52vh" : "calc(100vh - 36px)",
               overflowY: "auto",
               borderRadius: isMobile ? 18 : 20,
-              background: "rgba(255,255,255,0.88)",
-              boxShadow: "0 18px 44px rgba(15, 23, 42, 0.16)",
+              background: "rgba(255,255,255,0.94)",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
               border: "1px solid rgba(255,255,255,0.72)",
               backdropFilter: "blur(18px)",
               WebkitBackdropFilter: "blur(18px)",
-              padding: isMobile ? 12 : 14,
+              padding: isMobile ? 12 : 16,
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -1656,34 +1708,7 @@ export default function App() {
               </div>
             )}
 
-            {isStravaActivityLoading && (
-              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7a8c" }}>
-                Loading activity details...
-              </div>
-            )}
-
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {selectedStravaStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  style={{
-                    padding: "8px 9px",
-                    borderRadius: 12,
-                    background: "rgba(245,247,250,0.82)",
-                    border: "1px solid rgba(231,235,240,0.9)",
-                  }}
-                >
-                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
-                    {stat.label}
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: "#24364b" }}>
-                    {stat.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {selectedStravaActivity.description && (
+            {selectedStravaDescription && (
               <div
                 style={{
                   marginTop: 12,
@@ -1697,11 +1722,102 @@ export default function App() {
                   whiteSpace: "pre-wrap",
                 }}
               >
-                {selectedStravaActivity.description}
+                {selectedStravaDescription}
               </div>
             )}
 
+            {isStravaActivityLoading && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7a8c" }}>
+                Loading activity details...
+              </div>
+            )}
+
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {selectedStravaStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  style={{
+                    padding: "8px 9px",
+                    borderRadius: 12,
+                    background: "rgba(245,247,250,0.82)",
+                    border: "1px solid rgba(231,235,240,0.9)",
+                  }}
+                >
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
+                    {stat.label}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: isMobile ? 12 : 14, fontWeight: 700, color: "#24364b" }}>
+                    {stat.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                background: "rgba(15,23,42,0.94)",
+                color: "#fff",
+                padding: "12px 12px 10px",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.62)" }}>
+                    Heart rate
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 24, fontWeight: 800, lineHeight: 1 }}>
+                    {formatHeartRate(selectedStravaLatestHeartRate)}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: 6, textAlign: "right" }}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
+                    Avg <strong style={{ color: "#fff" }}>{formatHeartRate(selectedStravaAverageHeartRate)}</strong>
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
+                    Max <strong style={{ color: "#fff" }}>{formatHeartRate(selectedStravaMaxHeartRate)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {selectedStravaHeartRateChart ? (
+                <div style={{ marginTop: 12 }}>
+                  <svg viewBox="0 0 320 112" width="100%" height="108" aria-label="Heart rate chart" role="img">
+                    <defs>
+                      <linearGradient id="stravaHeartRateFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(248,113,113,0.55)" />
+                        <stop offset="100%" stopColor="rgba(248,113,113,0.04)" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="10" y1="28" x2="310" y2="28" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                    <line x1="10" y1="56" x2="310" y2="56" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                    <line x1="10" y1="84" x2="310" y2="84" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                    <path d={selectedStravaHeartRateChart.areaPath} fill="url(#stravaHeartRateFill)" />
+                    <path
+                      d={selectedStravaHeartRateChart.linePath}
+                      fill="none"
+                      stroke="#fb7185"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+              ) : (
+                <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                  No heart rate stream recorded for this activity.
+                </div>
+              )}
+            </div>
+
             <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Number.isFinite(selectedStravaActivity.totalPhotoCount) && selectedStravaActivity.totalPhotoCount > 0 && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: "#fff7ed", color: "#c2410c", fontSize: 12, fontWeight: 600 }}>
+                  {formatNumber(selectedStravaActivity.totalPhotoCount)} photos
+                </span>
+              )}
               {selectedStravaActivity.trainer && (
                 <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eef2ff", color: "#3847a8", fontSize: 12, fontWeight: 600 }}>
                   Trainer ride

@@ -233,7 +233,7 @@ function createStravaPhotoMarkerElement(marker, isMobile) {
   wrapper.appendChild(image);
 
   const totalPhotoCount = Number.isFinite(marker.totalPhotoCount) ? marker.totalPhotoCount : 0;
-  if (totalPhotoCount > 1) {
+  if (marker.showCountBadge !== false && totalPhotoCount > 1) {
     const badge = document.createElement("div");
     badge.textContent = totalPhotoCount > 99 ? "99+" : `${totalPhotoCount}`;
     badge.style.cssText = [
@@ -701,8 +701,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     if (!Array.isArray(coordinates) || !coordinates.length) return;
 
     const fitPadding = isMobileRef.current
-      ? { top: 48, right: 18, bottom: 260, left: 18 }
-      : { top: 96, right: 412, bottom: 84, left: 96 };
+      ? { top: 48, right: 18, bottom: 300, left: 18 }
+      : { top: 80, right: 84, bottom: 80, left: 444 };
 
     fitLineStringBounds(map, coordinates, fitPadding);
   }, [selectedStravaActivityId, stravaActivitiesGeoJson]);

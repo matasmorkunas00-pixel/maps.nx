@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getStravaAuthUrl, getStoredAuth, storeAuth, clearAuth,
-  exchangeCode, getValidToken, fetchAllActivities, activitiesToGeoJson, fetchActivityDetails, activityToProperties,
+  exchangeCode, getValidToken, fetchAllActivities, activitiesToGeoJson, fetchActivityDetails, fetchActivityStreams, activityToProperties, getHeartrateStream,
 } from "../utils/strava";
 
 const ACTIVITIES_CACHE_KEY = "strava_activities_cache";
@@ -93,8 +93,20 @@ export function useStrava() {
 
     try {
       const token = await getValidToken(auth, (newAuth) => setAuth(newAuth));
-      const activity = await fetchActivityDetails(token, activityId);
-      const details = activityToProperties(activity);
+      const [activityResult, streamsResult] = await Promise.allSettled([
+        fetchActivityDetails(token, activityId),
+        fetchActivityStreams(token, activityId),
+      ]);
+
+      if (activityResult.status !== "fulfilled") {
+        throw activityResult.reason instanceof Error
+          ? activityResult.reason
+          : new Error("Failed to fetch activity details");
+      }
+
+      const heartrateStream =
+        streamsResult.status === "fulfilled" ? getHeartrateStream(streamsResult.value) : null;
+      const details = activityToProperties(activityResult.value, { heartrateStream });
       activityDetailsCacheRef.current.set(activityId, details);
       return details;
     } catch (err) {
