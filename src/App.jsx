@@ -7,7 +7,7 @@ import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson
 import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
-import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRouteFolder, uploadCloudImportedRoute } from "./utils/cloudRoutes";
+import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRouteFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
@@ -82,6 +82,7 @@ export default function App() {
   const [importFolderName, setImportFolderName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [visibleFolders, setVisibleFolders] = useState(null);
+  const [openFolders, setOpenFolders] = useState([]);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
   const [activeMenuPanel, setActiveMenuPanel] = useState(null);
@@ -271,6 +272,10 @@ export default function App() {
     [visibleFolders, availableFolders]
   );
 
+  useEffect(() => {
+    setOpenFolders((current) => current.filter((folder) => availableFolders.includes(folder)));
+  }, [availableFolders]);
+
   const importedRoutesGeoJson = useMemo(
     () => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders),
     [importedRoutes, activeVisibleFolders]
@@ -310,9 +315,11 @@ export default function App() {
         } else {
           console.error("Failed to load cloud GPX folders:", foldersResult.reason);
           setCloudFolders([]);
-          setCloudRoutesError(
-            "Cloud folders need the latest Supabase SQL setup. Re-run supabase/setup.sql to enable folder creation."
-          );
+          if (!isMissingCloudFoldersTableError(foldersResult.reason)) {
+            setCloudRoutesError(
+              `Failed to load cloud GPX folders: ${foldersResult.reason?.message || "Unknown error"}`
+            );
+          }
         }
       } catch (error) {
         if (!isCancelled) {
@@ -419,6 +426,20 @@ export default function App() {
     });
   };
 
+  const openFolder = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setOpenFolders((current) => (current.includes(normalizedFolder) ? current : [...current, normalizedFolder]));
+  };
+
+  const toggleFolderOpen = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setOpenFolders((current) =>
+      current.includes(normalizedFolder)
+        ? current.filter((entry) => entry !== normalizedFolder)
+        : [...current, normalizedFolder]
+    );
+  };
+
   const handleCreateFolder = async () => {
     const folder = normalizeFolderName(newFolderName, "");
     if (!folder) {
@@ -443,10 +464,15 @@ export default function App() {
         const createdFolder = await createCloudFolder({ userId: supabaseUser.id, name: folder });
         setCloudFolders((current) => appendFolderName(current, createdFolder));
         addFolderToVisibleList(createdFolder);
+        openFolder(createdFolder);
         setNewFolderName("");
         setLibraryMessage(`Created folder "${createdFolder}".`);
       } catch (error) {
-        setLibraryError(`Failed to create folder: ${error?.message || "Unknown error"}`);
+        if (isMissingCloudFoldersTableError(error)) {
+          setLibraryError("Cloud folder creation needs the latest Supabase SQL setup. Re-run supabase/setup.sql once, then refresh.");
+        } else {
+          setLibraryError(`Failed to create folder: ${error?.message || "Unknown error"}`);
+        }
       } finally {
         setIsCloudRoutesLoading(false);
       }
@@ -474,7 +500,7 @@ export default function App() {
       setIsCloudRoutesLoading(true);
       setCloudRoutesError(null);
       try {
-        await createCloudFolder({ userId: supabaseUser.id, name: folder });
+        await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
         const uploadedRoutes = (
           await Promise.all(
             files.map((file, index) =>
@@ -493,6 +519,7 @@ export default function App() {
           setCloudFolders((current) => appendFolderName(current, folder));
           setCloudImportedRoutes((current) => [...uploadedRoutes, ...current]);
           addFolderToVisibleList(folder);
+          openFolder(folder);
         }
       } catch (error) {
         setLibraryError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`);
@@ -531,6 +558,7 @@ export default function App() {
     setGuestFolders((current) => appendFolderName(current, folder));
     setGuestImportedRoutes((current) => [...parsedRoutes, ...current]);
     addFolderToVisibleList(folder);
+    openFolder(folder);
     event.target.value = "";
   };
 
@@ -567,12 +595,13 @@ export default function App() {
     setLibraryError(null);
     setLibraryMessage(null);
     addFolderToVisibleList(folder);
+    openFolder(folder);
 
     if (isCloudLibraryActive && supabaseUser) {
       setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder } : entry)));
       setCloudFolders((current) => appendFolderName(current, folder));
       try {
-        await createCloudFolder({ userId: supabaseUser.id, name: folder });
+        await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
         await updateCloudImportedRouteFolder(routeId, folder);
       } catch (error) {
         setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder: route.folder } : entry)));
@@ -1273,48 +1302,86 @@ export default function App() {
                     {availableFolders.map((folder) => {
                       const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
                       const checked = activeVisibleFolders.includes(folder);
+                      const isOpen = openFolders.includes(folder);
                       return (
                         <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
-                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} />
-                              {folder}
-                            </span>
+                          <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleFolderVisibility(folder)}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => toggleFolderOpen(folder)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                minWidth: 0,
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                color: "#000",
+                                fontSize: 13,
+                                textAlign: "left",
+                              }}
+                            >
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  display: "inline-block",
+                                  fontSize: 12,
+                                  color: "#64748b",
+                                  transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+                                  transition: "transform 0.16s ease",
+                                }}
+                              >
+                                ▸
+                              </span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {folder}
+                              </span>
+                            </button>
                             <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
-                          </label>
-                          <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
-                            {folderRoutes.length === 0 ? (
-                              <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
-                            ) : folderRoutes.map((route) => (
-                              <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "start", fontSize: 12 }}>
-                                <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
-                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
-                                  </div>
-                                  <select
-                                    value={route.folder}
-                                    onChange={(e) => moveImportedRouteToFolder(route.id, e.target.value)}
-                                    style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
-                                    title={`Move ${route.name} to another folder`}
-                                  >
-                                    {availableFolders.map((folderOption) => (
-                                      <option key={folderOption} value={folderOption}>
-                                        {folderOption}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <input
-                                  type="color"
-                                  value={route.color || GPX_ROUTE_COLORS[0]}
-                                  onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
-                                  style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
-                                  title={`Change color for ${route.name}`}
-                                />
-                              </div>
-                            ))}
                           </div>
+                          {isOpen && (
+                            <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
+                              {folderRoutes.length === 0 ? (
+                                <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
+                              ) : folderRoutes.map((route) => (
+                                <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "start", fontSize: 12 }}>
+                                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                      <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
+                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                                    </div>
+                                    <select
+                                      value={route.folder}
+                                      onChange={(e) => moveImportedRouteToFolder(route.id, e.target.value)}
+                                      style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
+                                      title={`Move ${route.name} to another folder`}
+                                    >
+                                      {availableFolders.map((folderOption) => (
+                                        <option key={folderOption} value={folderOption}>
+                                          {folderOption}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <input
+                                    type="color"
+                                    value={route.color || GPX_ROUTE_COLORS[0]}
+                                    onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
+                                    style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                                    title={`Change color for ${route.name}`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

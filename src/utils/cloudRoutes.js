@@ -27,6 +27,20 @@ function normalizeFolderName(folderName) {
   return trimmed || "Imported";
 }
 
+export function isMissingCloudFoldersTableError(error) {
+  const parts = [
+    error?.code,
+    error?.message,
+    error?.details,
+    error?.hint,
+  ]
+    .map((value) => String(value || ""))
+    .join(" ")
+    .toLowerCase();
+
+  return parts.includes("gpx_folders") || parts.includes("could not find the table");
+}
+
 function buildImportedRouteFromRow(row, geoJson, index) {
   return normalizeImportedRoute(
     {
@@ -92,7 +106,7 @@ export async function listCloudFolders(userId) {
   );
 }
 
-export async function createCloudFolder({ userId, name }) {
+export async function createCloudFolder({ userId, name, allowMissingTable = false }) {
   const client = ensureSupabase();
   const folderName = normalizeFolderName(name);
 
@@ -109,7 +123,12 @@ export async function createCloudFolder({ userId, name }) {
       }
     );
 
-  if (error) throw error;
+  if (error) {
+    if (allowMissingTable && isMissingCloudFoldersTableError(error)) {
+      return folderName;
+    }
+    throw error;
+  }
   return folderName;
 }
 
