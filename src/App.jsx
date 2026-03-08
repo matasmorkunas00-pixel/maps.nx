@@ -423,6 +423,22 @@ export default function App() {
     if (!urls || typeof urls !== "object") return null;
     return urls["600"] || urls["2800"] || urls["100"] || Object.values(urls)[0] || null;
   }, [selectedStravaActivity]);
+  const selectedStravaPhotoMarkers = useMemo(() => {
+    if (!selectedStravaActivity?.id || !selectedStravaPrimaryPhotoUrl) return [];
+
+    const totalPhotoCount = Number.isFinite(selectedStravaActivity.totalPhotoCount)
+      ? Math.max(1, selectedStravaActivity.totalPhotoCount)
+      : 1;
+
+    return [
+      {
+        id: `${selectedStravaActivity.id}-primary-photo`,
+        imageUrl: selectedStravaPrimaryPhotoUrl,
+        totalPhotoCount,
+        progress: 0.52,
+      },
+    ];
+  }, [selectedStravaActivity, selectedStravaPrimaryPhotoUrl]);
 
   useEffect(() => {
     if (!selectedStravaActivity) return;
@@ -477,6 +493,7 @@ export default function App() {
     importedRoutesGeoJson,
     stravaActivitiesGeoJson: mapStravaActivitiesGeoJson,
     selectedStravaActivityId,
+    selectedStravaPhotoMarkers,
     routingMode,
     isMobile,
     speedMode,
@@ -1542,32 +1559,36 @@ export default function App() {
 
       {selectedStravaActivity && stravaConnected && (
         <div
-          onClick={closeStravaActivityModal}
           style={{
             position: "fixed",
-            inset: 0,
             zIndex: 30,
-            background: "rgba(15, 23, 42, 0.42)",
-            display: "grid",
-            placeItems: "center",
-            padding: isMobile ? 16 : 24,
+            pointerEvents: "none",
+            top: isMobile ? "auto" : 88,
+            right: isMobile ? 12 : 18,
+            bottom: 12,
+            left: isMobile ? 12 : "auto",
+            display: "flex",
+            alignItems: isMobile ? "flex-end" : "flex-start",
+            justifyContent: isMobile ? "center" : "flex-end",
           }}
         >
           <div
-            onClick={(event) => event.stopPropagation()}
             style={{
+              pointerEvents: "auto",
               width: "100%",
-              maxWidth: 420,
-              maxHeight: "78vh",
+              maxWidth: isMobile ? "100%" : 340,
+              maxHeight: isMobile ? "46vh" : "calc(100vh - 112px)",
               overflowY: "auto",
-              borderRadius: 18,
-              background: "rgba(255,255,255,0.98)",
-              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.28)",
-              border: "1px solid rgba(15, 23, 42, 0.08)",
-              padding: isMobile ? 14 : 16,
+              borderRadius: isMobile ? 18 : 20,
+              background: "rgba(255,255,255,0.88)",
+              boxShadow: "0 18px 44px rgba(15, 23, 42, 0.16)",
+              border: "1px solid rgba(255,255,255,0.72)",
+              backdropFilter: "blur(18px)",
+              WebkitBackdropFilter: "blur(18px)",
+              padding: isMobile ? 12 : 14,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span
@@ -1575,10 +1596,10 @@ export default function App() {
                       display: "inline-flex",
                       alignItems: "center",
                       borderRadius: 999,
-                      padding: "5px 9px",
-                      background: "rgba(252,76,2,0.1)",
+                      padding: "4px 8px",
+                      background: "rgba(252,76,2,0.12)",
                       color: "#FC4C02",
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
@@ -1590,10 +1611,10 @@ export default function App() {
                     <span style={{ fontSize: 12, color: "#6b7a8c" }}>{selectedStravaActivity.year}</span>
                   )}
                 </div>
-                <div style={{ marginTop: 10, fontSize: isMobile ? 22 : 24, fontWeight: 800, color: "#24364b", lineHeight: 1.15 }}>
+                <div style={{ marginTop: 8, fontSize: isMobile ? 18 : 20, fontWeight: 800, color: "#24364b", lineHeight: 1.15 }}>
                   {selectedStravaActivity.name || "Unnamed activity"}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 13, color: "#5c6c7c" }}>
+                <div style={{ marginTop: 5, fontSize: 12, color: "#5c6c7c" }}>
                   {formatActivityDate(selectedStravaActivity.startDateLocal || selectedStravaActivity.startDate)}
                 </div>
               </div>
@@ -1601,13 +1622,13 @@ export default function App() {
               <button
                 onClick={closeStravaActivityModal}
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   borderRadius: 999,
-                  border: "1px solid #d7dce3",
-                  background: "#fff",
+                  border: "1px solid rgba(15, 23, 42, 0.08)",
+                  background: "rgba(255,255,255,0.9)",
                   cursor: "pointer",
-                  fontSize: 18,
+                  fontSize: 17,
                   lineHeight: 1,
                   color: "#24364b",
                   flexShrink: 0,
@@ -1619,43 +1640,43 @@ export default function App() {
             </div>
 
             {selectedStravaPrimaryPhotoUrl && (
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 12 }}>
                 <img
                   src={selectedStravaPrimaryPhotoUrl}
                   alt={selectedStravaActivity.name || "Strava activity"}
                   style={{
                     width: "100%",
-                    maxHeight: 200,
+                    maxHeight: isMobile ? 132 : 148,
                     objectFit: "cover",
                     borderRadius: 14,
                     display: "block",
-                    border: "1px solid #e7ebf0",
+                    border: "1px solid rgba(231,235,240,0.9)",
                   }}
                 />
               </div>
             )}
 
             {isStravaActivityLoading && (
-              <div style={{ marginTop: 12, fontSize: 12, color: "#6b7a8c" }}>
+              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7a8c" }}>
                 Loading activity details...
               </div>
             )}
 
-            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {selectedStravaStats.map((stat) => (
                 <div
                   key={stat.label}
                   style={{
-                    padding: "9px 10px",
+                    padding: "8px 9px",
                     borderRadius: 12,
-                    background: "#f5f7fa",
-                    border: "1px solid #e7ebf0",
+                    background: "rgba(245,247,250,0.82)",
+                    border: "1px solid rgba(231,235,240,0.9)",
                   }}
                 >
                   <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
                     {stat.label}
                   </div>
-                  <div style={{ marginTop: 5, fontSize: 15, fontWeight: 700, color: "#24364b" }}>
+                  <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: "#24364b" }}>
                     {stat.value}
                   </div>
                 </div>
@@ -1665,12 +1686,12 @@ export default function App() {
             {selectedStravaActivity.description && (
               <div
                 style={{
-                  marginTop: 14,
+                  marginTop: 12,
                   padding: "10px 12px",
                   borderRadius: 12,
-                  background: "#f8fafc",
-                  border: "1px solid #e7ebf0",
-                  fontSize: 13,
+                  background: "rgba(248,250,252,0.8)",
+                  border: "1px solid rgba(231,235,240,0.9)",
+                  fontSize: 12,
                   lineHeight: 1.45,
                   color: "#425466",
                   whiteSpace: "pre-wrap",
@@ -1680,7 +1701,7 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
               {selectedStravaActivity.trainer && (
                 <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eef2ff", color: "#3847a8", fontSize: 12, fontWeight: 600 }}>
                   Trainer ride
