@@ -99,7 +99,7 @@ function applyGaiaLikeOutdoorTone(map, mapStyle) {
   const layers = map.getStyle()?.layers || [];
   if (!layers.length) return;
 
-  const reservedLayers = new Set(["route", "route-hit-area", "imported-routes", "strava-routes"]);
+  const reservedLayers = new Set(["route", "route-hit-area", "imported-routes"]);
   const layerKey = (layer) => `${layer.id} ${layer["source-layer"] || ""}`.toLowerCase();
 
   const trySetPaint = (layerId, prop, value) => {
@@ -645,7 +645,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       map.on("zoom", syncAppleBasemapCamera);
       map.on("resize", syncAppleBasemapCamera);
       addImportedLayer(map, importedGeoJsonRef.current);
-      if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
 
@@ -654,7 +653,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
       map.on("click", (e) => {
         if (e.originalEvent.target.closest(".maplibregl-marker")) return;
-        const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
+        const hits = map.getLayer("route-hit-area")
+          ? map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] })
+          : [];
         if (hits?.length && routeDataRef.current) {
           const coords = routeDataRef.current.features[0].geometry.coordinates;
           const nearest = nearestPointOnLine(coords, [e.lngLat.lng, e.lngLat.lat]);
@@ -766,8 +767,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
-      const strava = stravaGeoJsonRef.current;
-      if (strava?.features?.length) addStravaLayer(map, strava);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
     });
