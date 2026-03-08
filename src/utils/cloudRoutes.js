@@ -1,6 +1,6 @@
 import { parseGpxText } from "./gpx";
 import { getDefaultRouteColor, normalizeImportedRoute } from "./routes";
-import { GPX_FILES_BUCKET, GPX_ROUTES_TABLE, supabase } from "./supabase";
+import { GPX_FILES_BUCKET, GPX_FOLDERS_TABLE, GPX_ROUTES_TABLE, supabase } from "./supabase";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -20,6 +20,11 @@ function createCloudRouteId() {
   }
 
   throw new Error("Your browser does not support secure UUID generation");
+}
+
+function normalizeFolderName(folderName) {
+  const trimmed = String(folderName || "").trim();
+  return trimmed || "Imported";
 }
 
 function buildImportedRouteFromRow(row, geoJson, index) {
@@ -72,6 +77,42 @@ export async function listCloudImportedRoutes(userId) {
   return importedRoutes.filter(Boolean);
 }
 
+export async function listCloudFolders(userId) {
+  const client = ensureSupabase();
+  const { data: rows, error } = await client
+    .from(GPX_FOLDERS_TABLE)
+    .select("name")
+    .eq("user_id", userId)
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+
+  return Array.from(
+    new Set((rows || []).map((row) => normalizeFolderName(row?.name)).filter(Boolean))
+  );
+}
+
+export async function createCloudFolder({ userId, name }) {
+  const client = ensureSupabase();
+  const folderName = normalizeFolderName(name);
+
+  const { error } = await client
+    .from(GPX_FOLDERS_TABLE)
+    .upsert(
+      {
+        user_id: userId,
+        name: folderName,
+      },
+      {
+        onConflict: "user_id,name",
+        ignoreDuplicates: true,
+      }
+    );
+
+  if (error) throw error;
+  return folderName;
+}
+
 export async function uploadCloudImportedRoute({ userId, file, folder, color, index = 0 }) {
   const client = ensureSupabase();
   const gpxText = await file.text();
@@ -79,6 +120,7 @@ export async function uploadCloudImportedRoute({ userId, file, folder, color, in
   if (!parsed) throw new Error(`"${file.name}" is not a valid GPX file`);
 
   const routeId = createCloudRouteId();
+  const folderName = normalizeFolderName(folder);
   const routeName = parsed.name || file.name.replace(/\.gpx$/i, "") || "Imported GPX";
   const fileName = sanitizeFileName(file.name || `${routeName}.gpx`);
   const storagePath = `${userId}/${routeId}/${fileName}`;
@@ -98,7 +140,7 @@ export async function uploadCloudImportedRoute({ userId, file, folder, color, in
     id: routeId,
     user_id: userId,
     name: routeName,
-    folder,
+    folder: folderName,
     file_name: fileName,
     storage_path: storagePath,
     color: color || getDefaultRouteColor(index),
@@ -119,6 +161,16 @@ export async function updateCloudImportedRouteColor(routeId, color) {
   const { error } = await client
     .from(GPX_ROUTES_TABLE)
     .update({ color })
+    .eq("id", routeId);
+
+  if (error) throw error;
+}
+
+export async function updateCloudImportedRouteFolder(routeId, folder) {
+  const client = ensureSupabase();
+  const { error } = await client
+    .from(GPX_ROUTES_TABLE)
+    .update({ folder: normalizeFolderName(folder) })
     .eq("id", routeId);
 
   if (error) throw error;

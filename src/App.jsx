@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, GPX_ROUTE_COLORS, ROUTING_MODES, MAP_STYLES, MAPTILER_API_KEY } from "./constants";
+import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, GPX_FOLDER_STORAGE_KEY, GPX_ROUTE_COLORS, ROUTING_MODES, MAP_STYLES, MAPTILER_API_KEY } from "./constants";
 import { uid } from "./utils/geo";
 import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
 import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
-import { listCloudImportedRoutes, updateCloudImportedRouteColor, uploadCloudImportedRoute } from "./utils/cloudRoutes";
+import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRouteFolder, uploadCloudImportedRoute } from "./utils/cloudRoutes";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
@@ -38,6 +38,34 @@ function normalizeNominatimFeatures(payload) {
     });
 }
 
+function normalizeFolderName(value, fallback = "Imported") {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || fallback;
+}
+
+function appendFolderName(currentFolders, folderName) {
+  const normalizedFolder = normalizeFolderName(folderName, "");
+  if (!normalizedFolder) return Array.isArray(currentFolders) ? currentFolders : [];
+
+  const folders = Array.isArray(currentFolders)
+    ? currentFolders
+      .map((folder) => normalizeFolderName(folder, ""))
+      .filter(Boolean)
+    : [];
+
+  return folders.includes(normalizedFolder) ? folders : [...folders, normalizedFolder];
+}
+
+function loadStoredFolderNames() {
+  try {
+    const raw = localStorage.getItem(GPX_FOLDER_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.from(new Set((Array.isArray(parsed) ? parsed : []).map((folder) => normalizeFolderName(folder, "")).filter(Boolean)));
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -52,6 +80,7 @@ export default function App() {
   const [mapStyle, setMapStyle] = useState("streets");
   const [pressedButton, setPressedButton] = useState(null);
   const [importFolderName, setImportFolderName] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
   const [visibleFolders, setVisibleFolders] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
@@ -62,6 +91,8 @@ export default function App() {
   const [cloudAuthEmail, setCloudAuthEmail] = useState("");
   const [cloudAuthMessage, setCloudAuthMessage] = useState(null);
   const [cloudRoutesError, setCloudRoutesError] = useState(null);
+  const [libraryError, setLibraryError] = useState(null);
+  const [libraryMessage, setLibraryMessage] = useState(null);
   const [isCloudRoutesLoading, setIsCloudRoutesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -199,9 +230,12 @@ export default function App() {
     } catch { return []; }
   });
   const [cloudImportedRoutes, setCloudImportedRoutes] = useState([]);
+  const [guestFolders, setGuestFolders] = useState(loadStoredFolderNames);
+  const [cloudFolders, setCloudFolders] = useState([]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(routes)); }, [routes]);
   useEffect(() => { localStorage.setItem(GPX_LIBRARY_STORAGE_KEY, JSON.stringify(guestImportedRoutes)); }, [guestImportedRoutes]);
+  useEffect(() => { localStorage.setItem(GPX_FOLDER_STORAGE_KEY, JSON.stringify(guestFolders)); }, [guestFolders]);
 
   const {
     isConfigured: isSupabaseConfigured,
@@ -214,13 +248,19 @@ export default function App() {
 
   const isCloudLibraryActive = isSupabaseConfigured && !!supabaseUser;
   const importedRoutes = isCloudLibraryActive ? cloudImportedRoutes : guestImportedRoutes;
+  const explicitFolders = isCloudLibraryActive ? cloudFolders : guestFolders;
 
   const availableFolders = useMemo(
     () =>
-      Array.from(new Set(importedRoutes.map((r) => r?.folder).filter((f) => typeof f === "string" && f.trim()))).sort(
+      Array.from(
+        new Set([
+          ...explicitFolders,
+          ...importedRoutes.map((route) => normalizeFolderName(route?.folder, "")),
+        ].filter(Boolean))
+      ).sort(
         (a, b) => a.localeCompare(b)
       ),
-    [importedRoutes]
+    [explicitFolders, importedRoutes]
   );
 
   const activeVisibleFolders = useMemo(
@@ -241,6 +281,7 @@ export default function App() {
 
     if (!supabaseUser) {
       setCloudImportedRoutes([]);
+      setCloudFolders([]);
       setCloudRoutesError(null);
       return;
     }
@@ -251,8 +292,28 @@ export default function App() {
       setIsCloudRoutesLoading(true);
       setCloudRoutesError(null);
       try {
-        const routesFromCloud = await listCloudImportedRoutes(supabaseUser.id);
-        if (!isCancelled) setCloudImportedRoutes(routesFromCloud);
+        const [routesResult, foldersResult] = await Promise.allSettled([
+          listCloudImportedRoutes(supabaseUser.id),
+          listCloudFolders(supabaseUser.id),
+        ]);
+
+        if (isCancelled) return;
+
+        if (routesResult.status === "fulfilled") {
+          setCloudImportedRoutes(routesResult.value);
+        } else {
+          throw routesResult.reason;
+        }
+
+        if (foldersResult.status === "fulfilled") {
+          setCloudFolders(foldersResult.value);
+        } else {
+          console.error("Failed to load cloud GPX folders:", foldersResult.reason);
+          setCloudFolders([]);
+          setCloudRoutesError(
+            "Cloud folders need the latest Supabase SQL setup. Re-run supabase/setup.sql to enable folder creation."
+          );
+        }
       } catch (error) {
         if (!isCancelled) {
           setCloudRoutesError(`Failed to load cloud GPX library: ${error?.message || "Unknown error"}`);
@@ -350,18 +411,70 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleGpxUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    const folder = importFolderName.trim() || "Imported";
-    if (!files.length) {
-      event.target.value = "";
+  const addFolderToVisibleList = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setVisibleFolders((current) => {
+      if (current === null) return null;
+      return current.includes(normalizedFolder) ? current : [...current, normalizedFolder];
+    });
+  };
+
+  const handleCreateFolder = async () => {
+    const folder = normalizeFolderName(newFolderName, "");
+    if (!folder) {
+      setLibraryMessage(null);
+      setLibraryError("Enter a folder name before creating a folder.");
+      return;
+    }
+
+    setLibraryError(null);
+    setLibraryMessage(null);
+
+    if (availableFolders.includes(folder)) {
+      addFolderToVisibleList(folder);
+      setNewFolderName("");
+      setLibraryMessage(`Folder "${folder}" already exists.`);
       return;
     }
 
     if (isCloudLibraryActive && supabaseUser) {
       setIsCloudRoutesLoading(true);
+      try {
+        const createdFolder = await createCloudFolder({ userId: supabaseUser.id, name: folder });
+        setCloudFolders((current) => appendFolderName(current, createdFolder));
+        addFolderToVisibleList(createdFolder);
+        setNewFolderName("");
+        setLibraryMessage(`Created folder "${createdFolder}".`);
+      } catch (error) {
+        setLibraryError(`Failed to create folder: ${error?.message || "Unknown error"}`);
+      } finally {
+        setIsCloudRoutesLoading(false);
+      }
+      return;
+    }
+
+    setGuestFolders((current) => appendFolderName(current, folder));
+    addFolderToVisibleList(folder);
+    setNewFolderName("");
+    setLibraryMessage(`Created folder "${folder}".`);
+  };
+
+  const handleGpxUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    const folder = normalizeFolderName(importFolderName);
+    if (!files.length) {
+      event.target.value = "";
+      return;
+    }
+
+    setLibraryError(null);
+    setLibraryMessage(null);
+
+    if (isCloudLibraryActive && supabaseUser) {
+      setIsCloudRoutesLoading(true);
       setCloudRoutesError(null);
       try {
+        await createCloudFolder({ userId: supabaseUser.id, name: folder });
         const uploadedRoutes = (
           await Promise.all(
             files.map((file, index) =>
@@ -377,14 +490,12 @@ export default function App() {
         ).filter(Boolean);
 
         if (uploadedRoutes.length) {
+          setCloudFolders((current) => appendFolderName(current, folder));
           setCloudImportedRoutes((current) => [...uploadedRoutes, ...current]);
-          setVisibleFolders((current) => {
-            if (current === null) return null;
-            return current.includes(folder) ? current : [...current, folder];
-          });
+          addFolderToVisibleList(folder);
         }
       } catch (error) {
-        setCloudRoutesError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`);
+        setLibraryError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`);
       } finally {
         setIsCloudRoutesLoading(false);
         event.target.value = "";
@@ -411,12 +522,15 @@ export default function App() {
       )
     ).filter(Boolean);
 
-    if (!parsedRoutes.length) { event.target.value = ""; return; }
+    if (!parsedRoutes.length) {
+      setLibraryError("None of the selected files were valid GPX files.");
+      event.target.value = "";
+      return;
+    }
+
+    setGuestFolders((current) => appendFolderName(current, folder));
     setGuestImportedRoutes((current) => [...parsedRoutes, ...current]);
-    setVisibleFolders((current) => {
-      if (current === null) return null;
-      return current.includes(folder) ? current : [...current, folder];
-    });
+    addFolderToVisibleList(folder);
     event.target.value = "";
   };
 
@@ -430,13 +544,14 @@ export default function App() {
   const updateImportedRouteColor = (routeId, color) => {
     if (isCloudLibraryActive) {
       const previousColor = cloudImportedRoutes.find((route) => route.id === routeId)?.color;
-      setCloudRoutesError(null);
+      setLibraryError(null);
+      setLibraryMessage(null);
       setCloudImportedRoutes((current) => current.map((route) => (route.id === routeId ? { ...route, color } : route)));
       updateCloudImportedRouteColor(routeId, color).catch((error) => {
         setCloudImportedRoutes((current) =>
           current.map((route) => (route.id === routeId ? { ...route, color: previousColor || route.color } : route))
         );
-        setCloudRoutesError(`Failed to update cloud route color: ${error?.message || "Unknown error"}`);
+        setLibraryError(`Failed to update route color: ${error?.message || "Unknown error"}`);
       });
       return;
     }
@@ -444,13 +559,46 @@ export default function App() {
     setGuestImportedRoutes((current) => current.map((route) => (route.id === routeId ? { ...route, color } : route)));
   };
 
+  const moveImportedRouteToFolder = async (routeId, nextFolder) => {
+    const folder = normalizeFolderName(nextFolder);
+    const route = importedRoutes.find((entry) => entry.id === routeId);
+    if (!route || route.folder === folder) return;
+
+    setLibraryError(null);
+    setLibraryMessage(null);
+    addFolderToVisibleList(folder);
+
+    if (isCloudLibraryActive && supabaseUser) {
+      setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder } : entry)));
+      setCloudFolders((current) => appendFolderName(current, folder));
+      try {
+        await createCloudFolder({ userId: supabaseUser.id, name: folder });
+        await updateCloudImportedRouteFolder(routeId, folder);
+      } catch (error) {
+        setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder: route.folder } : entry)));
+        setLibraryError(`Failed to move route: ${error?.message || "Unknown error"}`);
+      }
+      return;
+    }
+
+    setGuestFolders((current) => appendFolderName(current, folder));
+    setGuestImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder } : entry)));
+  };
+
   const refreshCloudRoutes = async () => {
     if (!supabaseUser) return;
     setIsCloudRoutesLoading(true);
     setCloudRoutesError(null);
     try {
-      const routesFromCloud = await listCloudImportedRoutes(supabaseUser.id);
+      const [routesFromCloud, foldersFromCloud] = await Promise.all([
+        listCloudImportedRoutes(supabaseUser.id),
+        listCloudFolders(supabaseUser.id).catch((error) => {
+          console.error("Failed to refresh cloud GPX folders:", error);
+          return [];
+        }),
+      ]);
       setCloudImportedRoutes(routesFromCloud);
+      setCloudFolders(foldersFromCloud);
     } catch (error) {
       setCloudRoutesError(`Failed to refresh cloud GPX library: ${error?.message || "Unknown error"}`);
     } finally {
@@ -1064,6 +1212,22 @@ export default function App() {
               </div>
 
               <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
+                  <input
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="Create empty folder"
+                    style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
+                  />
+                  <button
+                    style={getButtonStyle("create_folder")}
+                    onClick={handleCreateFolder}
+                    disabled={isCloudRoutesLoading}
+                    {...getPressHandlers("create_folder")}
+                  >
+                    Create
+                  </button>
+                </div>
                 <input
                   value={importFolderName}
                   onChange={(e) => setImportFolderName(e.target.value)}
@@ -1082,6 +1246,16 @@ export default function App() {
                   {isCloudLibraryActive ? "Upload GPX files to cloud" : "Upload GPX files"}
                 </button>
               </div>
+              {libraryMessage && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#166534", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 10px" }}>
+                  {libraryMessage}
+                </div>
+              )}
+              {libraryError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px" }}>
+                  {libraryError}
+                </div>
+              )}
               <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
                 {isCloudLibraryActive
                   ? `${cloudImportedRoutes.length} routes synced to your account`
@@ -1109,11 +1283,27 @@ export default function App() {
                             <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
                           </label>
                           <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
-                            {folderRoutes.map((route) => (
-                              <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                  <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
-                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                            {folderRoutes.length === 0 ? (
+                              <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
+                            ) : folderRoutes.map((route) => (
+                              <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "start", fontSize: 12 }}>
+                                <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                    <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
+                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                                  </div>
+                                  <select
+                                    value={route.folder}
+                                    onChange={(e) => moveImportedRouteToFolder(route.id, e.target.value)}
+                                    style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
+                                    title={`Move ${route.name} to another folder`}
+                                  >
+                                    {availableFolders.map((folderOption) => (
+                                      <option key={folderOption} value={folderOption}>
+                                        {folderOption}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
                                 <input
                                   type="color"
