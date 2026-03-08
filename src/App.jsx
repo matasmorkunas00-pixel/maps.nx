@@ -787,28 +787,28 @@ export default function App() {
             </div>
           )}
           {isRouting && <div style={{ marginTop: 8, fontSize: 12, color: "#334155", textAlign: "center" }}>Calculating route...</div>}
-          <div style={{pointerEvents: "auto"}}>
-            {routeGeoJson && (
-              <div
-                style={{
-                  position: "fixed",
-                  bottom: 20,
-                  left: "75px",
-                  right: 20,
-                  height: "calc(100vh / 6)",
-                  background: "rgba(255, 255, 255, 0.8)",
-                  backdropFilter: "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  borderRadius: 14,
-                  padding: "10px",
-                  boxSizing: "border-box",
-                  boxShadow: "0 -5px 15px rgba(0,0,0,0.1)",
-                }}
-              >
-                <ElevationChart routeGeoJson={routeGeoJson} />
-              </div>
-            )}
-          </div>
+        </div>
+      )}
+
+      {activeMenuPanel === "route" && waypointsRef.current.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 20,
+            left: 120,
+            right: 20,
+            height: "calc(100vh / 6)",
+            background: "rgba(255, 255, 255, 0.8)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderRadius: 14,
+            padding: "10px",
+            boxSizing: "border-box",
+            boxShadow: "0 -5px 15px rgba(0,0,0,0.1)",
+            pointerEvents: "auto",
+          }}
+        >
+          <ElevationChart routeGeoJson={routeGeoJson} />
         </div>
       )}
 
