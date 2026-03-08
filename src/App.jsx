@@ -479,23 +479,7 @@ export default function App() {
     if (!urls || typeof urls !== "object") return null;
     return urls["600"] || urls["2800"] || urls["100"] || Object.values(urls)[0] || null;
   }, [selectedStravaActivity]);
-  const selectedStravaPhotoMarkers = useMemo(() => {
-    if (!selectedStravaActivity?.id || !selectedStravaPrimaryPhotoUrl) return [];
-
-    const totalPhotoCount = Number.isFinite(selectedStravaActivity.totalPhotoCount)
-      ? Math.max(1, selectedStravaActivity.totalPhotoCount)
-      : 1;
-
-    return [
-      {
-        id: `${selectedStravaActivity.id}-primary-photo`,
-        imageUrl: selectedStravaPrimaryPhotoUrl,
-        totalPhotoCount,
-        progress: 0.52,
-        showCountBadge: false,
-      },
-    ];
-  }, [selectedStravaActivity, selectedStravaPrimaryPhotoUrl]);
+  const selectedStravaPhotoMarkers = useMemo(() => [], []);
 
   useEffect(() => {
     if (!selectedStravaActivity) return;
@@ -1436,7 +1420,15 @@ export default function App() {
               padding: isMobile ? 12 : 16,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
+                alignItems: "start",
+                gap: 10,
+                paddingRight: 2,
+              }}
+            >
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span
@@ -1470,8 +1462,8 @@ export default function App() {
               <button
                 onClick={closeStravaActivityModal}
                 style={{
-                  width: 32,
-                  height: 32,
+                  width: 34,
+                  height: 34,
                   borderRadius: 999,
                   border: "1px solid rgba(15, 23, 42, 0.08)",
                   background: "rgba(255,255,255,0.9)",
@@ -1479,7 +1471,10 @@ export default function App() {
                   fontSize: 17,
                   lineHeight: 1,
                   color: "#24364b",
-                  flexShrink: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  alignSelf: "start",
+                  boxSizing: "border-box",
                 }}
                 aria-label="Close activity details"
               >
