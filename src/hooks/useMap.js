@@ -645,7 +645,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       map.on("zoom", syncAppleBasemapCamera);
       map.on("resize", syncAppleBasemapCamera);
       addImportedLayer(map, importedGeoJsonRef.current);
-      if (stravaGeoJsonRef.current?.features?.length) addStravaLayer(map, stravaGeoJsonRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
 
@@ -766,8 +765,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
-      const strava = stravaGeoJsonRef.current;
-      if (strava?.features?.length) addStravaLayer(map, strava);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
     });
