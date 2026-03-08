@@ -99,7 +99,7 @@ function applyGaiaLikeOutdoorTone(map, mapStyle) {
   const layers = map.getStyle()?.layers || [];
   if (!layers.length) return;
 
-  const reservedLayers = new Set(["route", "route-hit-area", "imported-routes", "strava-routes"]);
+  const reservedLayers = new Set(["route", "route-hit-area", "imported-routes"]);
   const layerKey = (layer) => `${layer.id} ${layer["source-layer"] || ""}`.toLowerCase();
 
   const trySetPaint = (layerId, prop, value) => {
@@ -679,6 +679,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
         // Handle clicks on existing route line to insert a new waypoint
         const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
+        const hits = map.getLayer("route-hit-area")
+          ? map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] })
+          : [];
         if (hits?.length && routeDataRef.current) {
           const coords = routeDataRef.current.features[0].geometry.coordinates;
           const nearest = nearestPointOnLine(coords, [e.lngLat.lng, e.lngLat.lat]);
