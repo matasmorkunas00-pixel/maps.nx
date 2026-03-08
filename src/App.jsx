@@ -951,6 +951,128 @@ export default function App() {
     transform: activeMenuPanel === panelKey ? "scale(0.97)" : "scale(1)",
   });
 
+  const libraryPanelFloatingStyle = {
+    ...expandedMenuFloatingStyle,
+    width: isMobile ? "min(calc(100vw - 84px), 336px)" : 340,
+    maxHeight: isMobile ? "68vh" : "70vh",
+    padding: 14,
+    borderRadius: 18,
+    background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,249,252,0.92) 100%)",
+    border: "1px solid rgba(148, 163, 184, 0.18)",
+    boxShadow: "0 22px 52px rgba(15, 23, 42, 0.2), 0 6px 18px rgba(15, 23, 42, 0.08)",
+    backdropFilter: "blur(18px)",
+    WebkitBackdropFilter: "blur(18px)",
+  };
+
+  const librarySectionStyle = {
+    display: "grid",
+    gap: 10,
+    padding: isMobile ? "12px" : "12px 13px",
+    borderRadius: 16,
+    background: "rgba(248, 250, 252, 0.88)",
+    border: "1px solid rgba(226, 232, 240, 0.95)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+  };
+
+  const getLibraryBadgeStyle = (tone = "neutral") => {
+    const themes = {
+      neutral: {
+        color: "#506176",
+        background: "rgba(241, 245, 249, 0.95)",
+        borderColor: "rgba(203, 213, 225, 0.9)",
+      },
+      active: {
+        color: "#0f766e",
+        background: "rgba(240, 253, 250, 0.96)",
+        borderColor: "rgba(153, 246, 228, 0.95)",
+      },
+      local: {
+        color: "#475569",
+        background: "rgba(248, 250, 252, 0.96)",
+        borderColor: "rgba(203, 213, 225, 0.95)",
+      },
+      success: {
+        color: "#166534",
+        background: "rgba(240, 253, 244, 0.96)",
+        borderColor: "rgba(187, 247, 208, 0.95)",
+      },
+      danger: {
+        color: "#991b1b",
+        background: "rgba(254, 242, 242, 0.96)",
+        borderColor: "rgba(254, 202, 202, 0.95)",
+      },
+    };
+    const theme = themes[tone] || themes.neutral;
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "5px 9px",
+      borderRadius: 999,
+      border: `1px solid ${theme.borderColor}`,
+      background: theme.background,
+      color: theme.color,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: "0.02em",
+      textTransform: "uppercase",
+      whiteSpace: "nowrap",
+    };
+  };
+
+  const getLibraryButtonStyle = (buttonId, tone = "secondary") => {
+    const isPressed = pressedButton === buttonId;
+    const themes = {
+      primary: {
+        background: isPressed ? "#0f172a" : "#18212f",
+        borderColor: isPressed ? "#0f172a" : "#18212f",
+        color: "#fff",
+        boxShadow: "0 12px 28px rgba(15, 23, 42, 0.18)",
+      },
+      secondary: {
+        background: isPressed ? "#e8eef5" : "rgba(255,255,255,0.9)",
+        borderColor: isPressed ? "#c6d2e0" : "rgba(203, 213, 225, 0.95)",
+        color: "#24364b",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
+      },
+      subtle: {
+        background: isPressed ? "rgba(232, 238, 245, 0.9)" : "rgba(244, 247, 250, 0.86)",
+        borderColor: isPressed ? "#d7dee8" : "rgba(226, 232, 240, 0.95)",
+        color: "#506176",
+        boxShadow: "none",
+      },
+      danger: {
+        background: isPressed ? "rgba(254, 226, 226, 0.95)" : "rgba(254, 242, 242, 0.96)",
+        borderColor: isPressed ? "#fecaca" : "rgba(254, 202, 202, 0.95)",
+        color: "#991b1b",
+        boxShadow: "none",
+      },
+    };
+    const theme = themes[tone] || themes.secondary;
+    return {
+      borderRadius: 14,
+      border: `1px solid ${theme.borderColor}`,
+      background: theme.background,
+      color: theme.color,
+      cursor: "pointer",
+      fontSize: isMobile ? 15 : 13,
+      fontWeight: tone === "primary" ? 700 : 600,
+      padding: isMobile ? "11px 14px" : "10px 13px",
+      transition: "background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease",
+      boxShadow: theme.boxShadow,
+      transform: isPressed ? "scale(0.985)" : "scale(1)",
+      WebkitTapHighlightColor: "transparent",
+    };
+  };
+
+  const libraryInputStyle = {
+    ...inputStyle,
+    borderRadius: 14,
+    border: "1px solid rgba(203, 213, 225, 0.95)",
+    background: "rgba(255,255,255,0.92)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)",
+  };
+
   // ---------- Render ----------
 
   return (
@@ -1349,320 +1471,387 @@ export default function App() {
             </svg>
           </button>
           {activeMenuPanel === "library" && (
-            <div style={expandedMenuFloatingStyle}>
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  background: "rgba(245,247,250,0.92)",
-                  border: "1px solid rgba(231,235,240,0.92)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <strong style={{ fontSize: 13, color: "#24364b" }}>Cloud sync</strong>
-                  {isSupabaseConfigured && isSupabaseAuthReady && supabaseUserEmail && (
-                    <span style={{ fontSize: 11, color: "#64748b" }}>Signed in</span>
+            <div style={libraryPanelFloatingStyle}>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ display: "grid", gap: 3 }}>
+                    <strong style={{ fontSize: 16, color: "#18212f", letterSpacing: "-0.02em" }}>GPX Library</strong>
+                    <span style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
+                      Upload, sort, and manage route folders.
+                    </span>
+                  </div>
+                  <span style={getLibraryBadgeStyle(isCloudLibraryActive ? "active" : "local")}>
+                    {isCloudLibraryActive ? "Cloud" : "Local"}
+                  </span>
+                </div>
+
+                <div style={librarySectionStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: 13, color: "#24364b" }}>Cloud sync</strong>
+                    {isSupabaseConfigured && isSupabaseAuthReady && supabaseUserEmail ? (
+                      <span style={getLibraryBadgeStyle("active")}>Signed in</span>
+                    ) : (
+                      <span style={getLibraryBadgeStyle("neutral")}>Optional</span>
+                    )}
+                  </div>
+
+                  {!isSupabaseConfigured ? (
+                    <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
+                      Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to enable per-user sync.
+                    </div>
+                  ) : !isSupabaseAuthReady ? (
+                    <div style={{ fontSize: 12, color: "#64748b" }}>Checking your session...</div>
+                  ) : supabaseUser ? (
+                    <>
+                      <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.45 }}>
+                        Syncing as <strong>{supabaseUserEmail}</strong>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          style={getLibraryButtonStyle("cloud_refresh", "secondary")}
+                          onClick={refreshCloudRoutes}
+                          disabled={isCloudRoutesLoading}
+                          {...getPressHandlers("cloud_refresh")}
+                        >
+                          {isCloudRoutesLoading ? "Syncing..." : "Refresh"}
+                        </button>
+                        <button
+                          style={getLibraryButtonStyle("cloud_signout", "subtle")}
+                          onClick={handleCloudSignOut}
+                          {...getPressHandlers("cloud_signout")}
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        value={cloudAuthEmail}
+                        onChange={(event) => setCloudAuthEmail(event.target.value)}
+                        placeholder="Email for cloud sync"
+                        style={{ ...libraryInputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
+                      />
+                      <button
+                        style={getLibraryButtonStyle("cloud_signin", "secondary")}
+                        onClick={handleCloudSignIn}
+                        {...getPressHandlers("cloud_signin")}
+                      >
+                        Send sign-in link
+                      </button>
+                    </>
+                  )}
+
+                  {cloudAuthMessage && (
+                    <div style={{ fontSize: 12, color: "#166534", background: "rgba(240,253,244,0.96)", border: "1px solid rgba(187,247,208,0.95)", borderRadius: 12, padding: "9px 10px" }}>
+                      {cloudAuthMessage}
+                    </div>
+                  )}
+                  {cloudRoutesError && (
+                    <div style={{ fontSize: 12, color: "#991b1b", background: "rgba(254,242,242,0.96)", border: "1px solid rgba(254,202,202,0.95)", borderRadius: 12, padding: "9px 10px" }}>
+                      {cloudRoutesError}
+                    </div>
                   )}
                 </div>
 
-                {!isSupabaseConfigured ? (
-                  <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
-                    Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to enable per-user GPX sync.
+                <div style={librarySectionStyle}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
+                    <input
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      placeholder="New folder"
+                      style={{ ...libraryInputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
+                    />
+                    <button
+                      style={getLibraryButtonStyle("create_folder", "secondary")}
+                      onClick={handleCreateFolder}
+                      disabled={isCloudRoutesLoading}
+                      {...getPressHandlers("create_folder")}
+                    >
+                      Create
+                    </button>
                   </div>
-                ) : !isSupabaseAuthReady ? (
-                  <div style={{ fontSize: 12, color: "#64748b" }}>Checking your session...</div>
-                ) : supabaseUser ? (
-                  <>
-                    <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.45 }}>
-                      Syncing as <strong>{supabaseUserEmail}</strong>
+                  <button
+                    style={getLibraryButtonStyle("upload", "primary")}
+                    onClick={() => gpxFileInputRef.current?.click()}
+                    disabled={isCloudRoutesLoading}
+                    {...getPressHandlers("upload")}
+                  >
+                    Upload GPX
+                  </button>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" }}>
+                      Default folder
+                    </span>
+                    <span style={getLibraryBadgeStyle("neutral")}>Imported</span>
+                  </div>
+                </div>
+
+                {libraryMessage && (
+                  <div style={{ fontSize: 12, color: "#166534", background: "rgba(240,253,244,0.96)", border: "1px solid rgba(187,247,208,0.95)", borderRadius: 12, padding: "9px 10px" }}>
+                    {libraryMessage}
+                  </div>
+                )}
+                {libraryError && (
+                  <div style={{ fontSize: 12, color: "#991b1b", background: "rgba(254,242,242,0.96)", border: "1px solid rgba(254,202,202,0.95)", borderRadius: 12, padding: "9px 10px" }}>
+                    {libraryError}
+                  </div>
+                )}
+
+                <div style={librarySectionStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "grid", gap: 3 }}>
+                      <strong style={{ fontSize: 13, color: "#24364b" }}>Folders</strong>
+                      <span style={{ fontSize: 12, color: "#64748b" }}>
+                        {isCloudLibraryActive ? `${cloudImportedRoutes.length} routes synced` : `${importedRoutes.length} local routes`}
+                      </span>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button
-                        style={getButtonStyle("cloud_refresh")}
-                        onClick={refreshCloudRoutes}
-                        disabled={isCloudRoutesLoading}
-                        {...getPressHandlers("cloud_refresh")}
+                        style={getLibraryButtonStyle("folders_all", "subtle")}
+                        onClick={() => setVisibleFolders(availableFolders)}
+                        {...getPressHandlers("folders_all")}
                       >
-                        {isCloudRoutesLoading ? "Syncing..." : "Refresh"}
+                        Show all
                       </button>
                       <button
-                        style={getButtonStyle("cloud_signout")}
-                        onClick={handleCloudSignOut}
-                        {...getPressHandlers("cloud_signout")}
+                        style={getLibraryButtonStyle("folders_none", "subtle")}
+                        onClick={() => setVisibleFolders([])}
+                        {...getPressHandlers("folders_none")}
                       >
-                        Sign out
+                        Hide all
                       </button>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      value={cloudAuthEmail}
-                      onChange={(event) => setCloudAuthEmail(event.target.value)}
-                      placeholder="Email for cloud sync"
-                      style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
-                    />
-                    <button
-                      style={getButtonStyle("cloud_signin", true)}
-                      onClick={handleCloudSignIn}
-                      {...getPressHandlers("cloud_signin")}
-                    >
-                      Email me a sign-in link
-                    </button>
-                  </>
-                )}
+                  </div>
 
-                {cloudAuthMessage && (
-                  <div style={{ fontSize: 12, color: "#166534", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 10px" }}>
-                    {cloudAuthMessage}
-                  </div>
-                )}
-                {cloudRoutesError && (
-                  <div style={{ fontSize: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px" }}>
-                    {cloudRoutesError}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
-                  <input
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="Create empty folder"
-                    style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
-                  />
-                  <button
-                    style={getButtonStyle("create_folder")}
-                    onClick={handleCreateFolder}
-                    disabled={isCloudRoutesLoading}
-                    {...getPressHandlers("create_folder")}
-                  >
-                    Create
-                  </button>
-                </div>
-                <button
-                  style={getButtonStyle("upload")}
-                  onClick={() => gpxFileInputRef.current?.click()}
-                  disabled={isCloudRoutesLoading}
-                  {...getPressHandlers("upload")}
-                >
-                  {isCloudLibraryActive ? "Upload GPX files to Imported" : "Upload GPX files to Imported"}
-                </button>
-              </div>
-              {libraryMessage && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "#166534", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 10px" }}>
-                  {libraryMessage}
-                </div>
-              )}
-              {libraryError && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px" }}>
-                  {libraryError}
-                </div>
-              )}
-              <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
-                {isCloudLibraryActive
-                  ? `${cloudImportedRoutes.length} routes synced to your account`
-                  : isSupabaseConfigured
-                    ? "Current GPX library is local to this browser until you sign in."
-                    : "Current GPX library is stored only in this browser."}
-              </div>
-              {availableFolders.length > 0 ? (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                    <button style={getButtonStyle("folders_all")} onClick={() => setVisibleFolders(availableFolders)} {...getPressHandlers("folders_all")}>Show all</button>
-                    <button style={getButtonStyle("folders_none")} onClick={() => setVisibleFolders([])} {...getPressHandlers("folders_none")}>Hide all</button>
-                  </div>
-                  <div style={{ display: "grid", gap: 6, maxHeight: 210, overflow: "auto" }}>
-                    {availableFolders.map((folder) => {
-                      const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
-                      const checked = activeVisibleFolders.includes(folder);
-                      const isOpen = openFolders.includes(folder);
-                      const selectedRouteIds = Array.isArray(selectedRouteIdsByFolder?.[folder]) ? selectedRouteIdsByFolder[folder] : [];
-                      const selectedCount = selectedRouteIds.length;
-                      const allSelected = folderRoutes.length > 0 && selectedCount === folderRoutes.length;
-                      const moveTargets = availableFolders.filter((candidate) => candidate !== folder);
-                      const bulkMoveTarget = moveTargets.includes(bulkMoveTargets?.[folder]) ? bulkMoveTargets[folder] : (moveTargets[0] || "");
-                      return (
-                        <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", alignItems: "center", gap: 8 }}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleFolderVisibility(folder)}
-                              onClick={(event) => event.stopPropagation()}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => toggleFolderOpen(folder)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                minWidth: 0,
-                                background: "transparent",
-                                border: "none",
-                                padding: 0,
-                                cursor: "pointer",
-                                color: "#000",
-                                fontSize: 13,
-                                textAlign: "left",
-                              }}
-                            >
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {folder}
-                              </span>
-                            </button>
-                            <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
-                            {folder !== "Imported" && (
+                  {availableFolders.length > 0 ? (
+                    <div style={{ display: "grid", gap: 8, maxHeight: 260, overflow: "auto", paddingRight: 2 }}>
+                      {availableFolders.map((folder) => {
+                        const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
+                        const checked = activeVisibleFolders.includes(folder);
+                        const isOpen = openFolders.includes(folder);
+                        const selectedRouteIds = Array.isArray(selectedRouteIdsByFolder?.[folder]) ? selectedRouteIdsByFolder[folder] : [];
+                        const selectedCount = selectedRouteIds.length;
+                        const allSelected = folderRoutes.length > 0 && selectedCount === folderRoutes.length;
+                        const moveTargets = availableFolders.filter((candidate) => candidate !== folder);
+                        const bulkMoveTarget = moveTargets.includes(bulkMoveTargets?.[folder]) ? bulkMoveTargets[folder] : (moveTargets[0] || "");
+                        return (
+                          <div
+                            key={folder}
+                            style={{
+                              display: "grid",
+                              gap: 10,
+                              padding: "10px 11px",
+                              borderRadius: 15,
+                              background: "rgba(255,255,255,0.9)",
+                              border: "1px solid rgba(226,232,240,0.95)",
+                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8)",
+                            }}
+                          >
+                            <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleFolderVisibility(folder)}
+                                onClick={(event) => event.stopPropagation()}
+                              />
                               <button
                                 type="button"
-                                onClick={() => removeFolder(folder)}
-                                disabled={isCloudRoutesLoading}
+                                onClick={() => toggleFolderOpen(folder)}
                                 style={{
-                                  border: "none",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  minWidth: 0,
                                   background: "transparent",
-                                  color: "#991b1b",
-                                  cursor: "pointer",
+                                  border: "none",
                                   padding: 0,
-                                  fontSize: 12,
+                                  cursor: "pointer",
+                                  color: "#18212f",
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  textAlign: "left",
                                 }}
-                                title={
-                                  folderRoutes.length
-                                    ? `Move all files to Imported and remove ${folder}`
-                                    : `Remove ${folder}`
-                                }
                               >
-                                Remove
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {folder}
+                                </span>
                               </button>
-                            )}
-                          </div>
-                          {isOpen && (
-                            <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
-                              {folderRoutes.length === 0 ? (
-                                <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
-                              ) : (
-                                <>
-                                  <div style={{ display: "grid", gap: 6, paddingBottom: 2 }}>
-                                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                                      <button
-                                        style={getButtonStyle(`folder_select_all_${folder}`)}
-                                        onClick={() => selectAllRoutesInFolder(folder)}
-                                        disabled={allSelected}
-                                        {...getPressHandlers(`folder_select_all_${folder}`)}
-                                      >
-                                        Select all
-                                      </button>
-                                      <button
-                                        style={getButtonStyle(`folder_clear_${folder}`)}
-                                        onClick={() => clearFolderSelection(folder)}
-                                        disabled={!selectedCount}
-                                        {...getPressHandlers(`folder_clear_${folder}`)}
-                                      >
-                                        Clear
-                                      </button>
-                                      <span style={{ fontSize: 12, color: "#64748b" }}>
-                                        {selectedCount
-                                          ? `${selectedCount} selected`
-                                          : "Select routes to move them together"}
-                                      </span>
-                                    </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
-                                      <select
-                                        value={bulkMoveTarget}
-                                        onChange={(event) =>
-                                          setBulkMoveTargets((current) => ({
-                                            ...current,
-                                            [folder]: event.target.value,
-                                          }))
-                                        }
-                                        style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
-                                        disabled={!moveTargets.length}
-                                        title={`Choose where to move selected routes from ${folder}`}
-                                      >
-                                        {moveTargets.length === 0 ? (
-                                          <option value="">No other folders available</option>
-                                        ) : moveTargets.map((folderOption) => (
-                                          <option key={folderOption} value={folderOption}>
-                                            {folderOption}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <button
-                                        style={getButtonStyle(`folder_move_${folder}`)}
-                                        onClick={() => moveImportedRoutesToFolder(selectedRouteIds, bulkMoveTarget)}
-                                        disabled={!selectedCount || !bulkMoveTarget}
-                                        {...getPressHandlers(`folder_move_${folder}`)}
-                                      >
-                                        Move selected
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {folderRoutes.map((route) => (
-                                    <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
-                                      <label style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedRouteIds.includes(route.id)}
-                                          onChange={() => toggleRouteSelection(folder, route.id)}
-                                        />
-                                        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                          <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
-                                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
-                                        </span>
-                                      </label>
-                                      <input
-                                        type="color"
-                                        value={route.color || GPX_ROUTE_COLORS[0]}
-                                        onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
-                                        style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
-                                        title={`Change color for ${route.name}`}
-                                      />
-                                    </div>
-                                  ))}
-                                </>
+                              <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{folderRoutes.length}</span>
+                              {folder !== "Imported" && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeFolder(folder)}
+                                  disabled={isCloudRoutesLoading}
+                                  style={getLibraryButtonStyle(`remove_folder_${folder}`, "danger")}
+                                  {...getPressHandlers(`remove_folder_${folder}`)}
+                                  title={
+                                    folderRoutes.length
+                                      ? `Move all files to Imported and remove ${folder}`
+                                      : `Remove ${folder}`
+                                  }
+                                >
+                                  Remove
+                                </button>
                               )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>No imported GPX routes yet.</div>
-              )}
-              <div style={{ marginTop: 10, borderTop: "1px solid #e6e8ed", paddingTop: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong style={{ fontSize: 13 }}>Saved routes</strong>
-                  <span style={{ fontSize: 12, opacity: 0.7 }}>{routes.length}</span>
-                </div>
-                <div style={{ maxHeight: 170, overflow: "auto", marginTop: 6 }}>
-                  {routes.length === 0 ? (
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>No saved routes yet.</div>
+
+                            {isOpen && (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: 8,
+                                  padding: "10px 10px 10px 30px",
+                                  borderRadius: 13,
+                                  background: "rgba(248,250,252,0.82)",
+                                  border: "1px solid rgba(226,232,240,0.92)",
+                                }}
+                              >
+                                {folderRoutes.length === 0 ? (
+                                  <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
+                                ) : (
+                                  <>
+                                    <div style={{ display: "grid", gap: 8, paddingBottom: 2 }}>
+                                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                                        <button
+                                          style={getLibraryButtonStyle(`folder_select_all_${folder}`, "subtle")}
+                                          onClick={() => selectAllRoutesInFolder(folder)}
+                                          disabled={allSelected}
+                                          {...getPressHandlers(`folder_select_all_${folder}`)}
+                                        >
+                                          Select all
+                                        </button>
+                                        <button
+                                          style={getLibraryButtonStyle(`folder_clear_${folder}`, "subtle")}
+                                          onClick={() => clearFolderSelection(folder)}
+                                          disabled={!selectedCount}
+                                          {...getPressHandlers(`folder_clear_${folder}`)}
+                                        >
+                                          Clear
+                                        </button>
+                                        <span style={getLibraryBadgeStyle(selectedCount ? "active" : "neutral")}>
+                                          {selectedCount ? `${selectedCount} selected` : "No selection"}
+                                        </span>
+                                      </div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
+                                        <select
+                                          value={bulkMoveTarget}
+                                          onChange={(event) =>
+                                            setBulkMoveTargets((current) => ({
+                                              ...current,
+                                              [folder]: event.target.value,
+                                            }))
+                                          }
+                                          style={{ ...libraryInputStyle, padding: "8px 10px", fontSize: 12, width: "100%" }}
+                                          disabled={!moveTargets.length}
+                                          title={`Choose where to move selected routes from ${folder}`}
+                                        >
+                                          {moveTargets.length === 0 ? (
+                                            <option value="">No other folders available</option>
+                                          ) : moveTargets.map((folderOption) => (
+                                            <option key={folderOption} value={folderOption}>
+                                              {folderOption}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          style={getLibraryButtonStyle(`folder_move_${folder}`, "secondary")}
+                                          onClick={() => moveImportedRoutesToFolder(selectedRouteIds, bulkMoveTarget)}
+                                          disabled={!selectedCount || !bulkMoveTarget}
+                                          {...getPressHandlers(`folder_move_${folder}`)}
+                                        >
+                                          Move
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {folderRoutes.map((route) => (
+                                      <div
+                                        key={route.id}
+                                        style={{
+                                          display: "grid",
+                                          gridTemplateColumns: "1fr auto",
+                                          gap: 8,
+                                          alignItems: "center",
+                                          padding: "6px 0",
+                                          fontSize: 12,
+                                          borderTop: "1px solid rgba(226,232,240,0.75)",
+                                        }}
+                                      >
+                                        <label style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedRouteIds.includes(route.id)}
+                                            onChange={() => toggleRouteSelection(folder, route.id)}
+                                          />
+                                          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                            <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
+                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#18212f" }} title={route.name}>
+                                              {route.name}
+                                            </span>
+                                          </span>
+                                        </label>
+                                        <input
+                                          type="color"
+                                          value={route.color || GPX_ROUTE_COLORS[0]}
+                                          onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
+                                          style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                                          title={`Change color for ${route.name}`}
+                                        />
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
-                    routes.map((r) => (
-                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef1f4" }}>
-                        <button
-                          onClick={() => loadRoute(r.id)}
-                          style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 12 }}
-                          title="Load route"
-                        >
-                          <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600 }}>{r.name}</div>
-                          <div style={{ fontSize: 11, opacity: 0.68 }}>{r.distanceKm} km • {r.elevationGainM} m</div>
-                        </button>
-                        <button
-                          style={getButtonStyle(`delete_${r.id}`)}
-                          onClick={() => deleteRoute(r.id)}
-                          title="Delete route"
-                          {...getPressHandlers(`delete_${r.id}`)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))
+                    <div style={{ fontSize: 12, color: "#64748b" }}>No imported GPX routes yet.</div>
                   )}
+                </div>
+
+                <div style={librarySectionStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <strong style={{ fontSize: 13, color: "#24364b" }}>Saved routes</strong>
+                    <span style={getLibraryBadgeStyle("neutral")}>{routes.length}</span>
+                  </div>
+                  <div style={{ maxHeight: 180, overflow: "auto", display: "grid", gap: 4, paddingRight: 2 }}>
+                    {routes.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#64748b" }}>No saved routes yet.</div>
+                    ) : (
+                      routes.map((r) => (
+                        <div
+                          key={r.id}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto",
+                            gap: 10,
+                            alignItems: "center",
+                            padding: "8px 0",
+                            borderTop: "1px solid rgba(226,232,240,0.78)",
+                          }}
+                        >
+                          <button
+                            onClick={() => loadRoute(r.id)}
+                            style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 12 }}
+                            title="Load route"
+                          >
+                            <div style={{ fontWeight: r.id === activeRouteId ? 700 : 600, color: "#18212f" }}>{r.name}</div>
+                            <div style={{ fontSize: 11, color: "#64748b" }}>{r.distanceKm} km • {r.elevationGainM} m</div>
+                          </button>
+                          <button
+                            style={getLibraryButtonStyle(`delete_${r.id}`, "danger")}
+                            onClick={() => deleteRoute(r.id)}
+                            title="Delete route"
+                            {...getPressHandlers(`delete_${r.id}`)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
