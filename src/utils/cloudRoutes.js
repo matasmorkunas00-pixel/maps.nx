@@ -1,5 +1,4 @@
 import { parseGpxText } from "./gpx";
-import { uid } from "./geo";
 import { getDefaultRouteColor, normalizeImportedRoute } from "./routes";
 import { GPX_FILES_BUCKET, GPX_ROUTES_TABLE, supabase } from "./supabase";
 
@@ -13,6 +12,14 @@ function sanitizeFileName(fileName) {
     .trim()
     .replace(/[^a-zA-Z0-9._-]+/g, "_")
     .replace(/_+/g, "_");
+}
+
+function createCloudRouteId() {
+  if (typeof crypto?.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  throw new Error("Your browser does not support secure UUID generation");
 }
 
 function buildImportedRouteFromRow(row, geoJson, index) {
@@ -71,7 +78,7 @@ export async function uploadCloudImportedRoute({ userId, file, folder, color, in
   const parsed = parseGpxText(gpxText);
   if (!parsed) throw new Error(`"${file.name}" is not a valid GPX file`);
 
-  const routeId = uid();
+  const routeId = createCloudRouteId();
   const routeName = parsed.name || file.name.replace(/\.gpx$/i, "") || "Imported GPX";
   const fileName = sanitizeFileName(file.name || `${routeName}.gpx`);
   const storagePath = `${userId}/${routeId}/${fileName}`;
