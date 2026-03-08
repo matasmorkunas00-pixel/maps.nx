@@ -801,13 +801,14 @@ export default function App() {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 3,
-            width: isMobile ? "calc(100vw - 20px)" : 364,
+            width: "auto",
+            maxWidth: isMobile ? "calc(100vw - 20px)" : "calc(100vw - 180px)",
             pointerEvents: "none",
             animation: "route-stats-fade-in 0.22s ease both",
           }}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 8, alignItems: "stretch" }}>
-            <div style={{ display: "grid", gap: 8, pointerEvents: "auto" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", pointerEvents: "auto" }}>
+            <div style={{ display: "grid", gap: 8 }}>
               <button
                 onClick={undoLast}
                 title="Undo"
@@ -876,6 +877,7 @@ export default function App() {
                       border: "1px solid rgba(231,235,240,0.85)",
                       backdropFilter: "blur(8px)",
                       WebkitBackdropFilter: "blur(8px)",
+                      minWidth: 120,
                     }}
                   >
                     <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
@@ -887,6 +889,91 @@ export default function App() {
                 )
               )}
             </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+                <button
+                    onClick={saveRoute}
+                    disabled={isRouting}
+                    title="Save route"
+                    style={{
+                        width: isMobile ? 36 : 34,
+                        height: isMobile ? 36 : 34,
+                        borderRadius: 10,
+                        border: "1px solid rgba(231,235,240,0.85)",
+                        background: pressedButton === "save_icon" ? "rgba(224,230,238,0.92)" : "rgba(245,247,250,0.82)",
+                        backdropFilter: "blur(8px)",
+                        WebkitBackdropFilter: "blur(8px)",
+                        boxShadow: "0 6px 16px rgba(15, 23, 42, 0.1)",
+                        display: "grid",
+                        placeItems: "center",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "background-color 0.18s ease, transform 0.18s ease",
+                        transform: pressedButton === "save_icon" ? "scale(0.96)" : "scale(1)",
+                    }}
+                    {...getPressHandlers("save_icon")}
+                    >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </button>
+                <button
+                    onClick={exportGPX}
+                    title="Export GPX"
+                    style={{
+                        width: isMobile ? 36 : 34,
+                        height: isMobile ? 36 : 34,
+                        borderRadius: 10,
+                        border: "1px solid rgba(231,235,240,0.85)",
+                        background: pressedButton === "export_icon" ? "rgba(224,230,238,0.92)" : "rgba(245,247,250,0.82)",
+                        backdropFilter: "blur(8px)",
+                        WebkitBackdropFilter: "blur(8px)",
+                        boxShadow: "0 6px 16px rgba(15, 23, 42, 0.1)",
+                        display: "grid",
+                        placeItems: "center",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "background-color 0.18s ease, transform 0.18s ease",
+                        transform: pressedButton === "export_icon" ? "scale(0.96)" : "scale(1)",
+                    }}
+                    {...getPressHandlers("export_icon")}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+                        <polyline points="7 10 12 15 17 10" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+                        <line x1="12" y1="15" x2="12" y2="3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 8, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      value={routeName}
+                      onChange={(e) => setRouteName(e.target.value)}
+                      placeholder="Route name"
+                      style={{ ...inputStyle, padding: isMobile ? 12 : 10, height: 34, boxSizing: "border-box" }}
+                    />
+                    <button style={{...getButtonStyle("new"), height: 34, padding: "0 12px"}} onClick={newRoute} {...getPressHandlers("new")}>New</button>
+                </div>
+                <div>
+                    <select value={routingMode} onChange={(e) => setRoutingMode(e.target.value)} style={{ ...inputStyle, width: '100%', padding: '0 10px', height: 34, boxSizing: "border-box" }}>
+                      {Object.entries(ROUTING_MODES).map(([value, opt]) => (
+                        <option key={value} value={value}>{opt.label}</option>
+                      ))}
+                    </select>
+                </div>
+            </div>
+          </div>
+          {routingError && (
+            <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: 12, pointerEvents: "auto" }}>
+                {routingError}
+            </div>
+          )}
+          {isRouting && <div style={{ marginTop: 8, fontSize: 12, color: "#334155", textAlign: "center" }}>Calculating route...</div>}
+          <div style={{pointerEvents: "auto"}}>
+            {routeGeoJson && <div style={{ marginTop: 8 }}><ElevationChart routeGeoJson={routeGeoJson} /></div>}
           </div>
         </div>
       )}
@@ -1012,40 +1099,6 @@ export default function App() {
               <path d="M8.2 17.1C12.8 16 10.3 8.9 15.8 7.2" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
           </button>
-          {activeMenuPanel === "route" && (
-            <div style={expandedMenuFloatingStyle}>
-              {routingError && (
-                <div style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: 12 }}>
-                  {routingError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  value={routeName}
-                  onChange={(e) => setRouteName(e.target.value)}
-                  placeholder="Route name"
-                  style={{ ...inputStyle, flex: 1, padding: isMobile ? 12 : 10 }}
-                />
-                <button style={getButtonStyle("new")} onClick={newRoute} {...getPressHandlers("new")}>New</button>
-              </div>
-              <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <button style={getButtonStyle("save", true)} onClick={saveRoute} disabled={isRouting} {...getPressHandlers("save")}>Save</button>
-                <button style={getButtonStyle("export")} onClick={exportGPX} {...getPressHandlers("export")}>Export GPX</button>
-              </div>
-              <div style={{ marginTop: 8 }}>
-                <label style={{ display: "grid", gap: 5, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#475569" }}>
-                  Routing mode
-                  <select value={routingMode} onChange={(e) => setRoutingMode(e.target.value)} style={{ ...inputStyle, width: "100%", padding: 10 }}>
-                    {Object.entries(ROUTING_MODES).map(([value, opt]) => (
-                      <option key={value} value={value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {isRouting && <div style={{ marginTop: 8, fontSize: 12, color: "#334155", textAlign: "center" }}>Calculating route...</div>}
-              {routeGeoJson && <div style={{ marginTop: 8 }}><ElevationChart routeGeoJson={routeGeoJson} /></div>}
-            </div>
-          )}
         </div>
 
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: menuIconSize }}>
