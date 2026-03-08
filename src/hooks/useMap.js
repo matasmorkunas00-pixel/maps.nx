@@ -161,7 +161,7 @@ function calculateElevationGain(geojson) {
   return total;
 }
 
-function fitLineStringBounds(map, coordinates, isMobile) {
+function fitLineStringBounds(map, coordinates, padding) {
   if (!map || !Array.isArray(coordinates) || !coordinates.length) return;
 
   const bounds = coordinates.reduce(
@@ -170,21 +170,110 @@ function fitLineStringBounds(map, coordinates, isMobile) {
   );
 
   map.fitBounds(bounds, {
-    padding: isMobile ? 56 : 84,
+    padding,
     duration: 500,
     maxZoom: 15,
   });
 }
 
+function getCoordinateAtProgress(coordinates, progress = 0.5) {
+  if (!Array.isArray(coordinates) || !coordinates.length) return null;
+  if (coordinates.length === 1) return coordinates[0];
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const segmentLengths = [];
+  let totalLength = 0;
+
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = coordinates[index - 1];
+    const current = coordinates[index];
+    const segmentLength = Math.hypot(current[0] - previous[0], current[1] - previous[1]);
+    segmentLengths.push(segmentLength);
+    totalLength += segmentLength;
+  }
+
+  if (!Number.isFinite(totalLength) || totalLength <= 0) {
+    return coordinates[Math.floor((coordinates.length - 1) * clampedProgress)];
+  }
+
+  const targetLength = totalLength * clampedProgress;
+  let walkedLength = 0;
+
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const segmentLength = segmentLengths[index - 1];
+    const nextWalkedLength = walkedLength + segmentLength;
+    if (targetLength <= nextWalkedLength) {
+      const start = coordinates[index - 1];
+      const end = coordinates[index];
+      const localProgress = segmentLength > 0 ? (targetLength - walkedLength) / segmentLength : 0;
+      return [
+        start[0] + (end[0] - start[0]) * localProgress,
+        start[1] + (end[1] - start[1]) * localProgress,
+      ];
+    }
+    walkedLength = nextWalkedLength;
+  }
+
+  return coordinates[coordinates.length - 1];
+}
+
+function createStravaPhotoMarkerElement(marker, isMobile) {
+  const size = isMobile ? 54 : 64;
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `position:relative;width:${size}px;height:${size}px;pointer-events:auto;`;
+
+  const image = document.createElement("div");
+  image.style.cssText = [
+    "width:100%",
+    "height:100%",
+    "border-radius:999px",
+    "overflow:hidden",
+    "border:4px solid rgba(255,255,255,0.96)",
+    "box-shadow:0 12px 24px rgba(15,23,42,0.24)",
+    "background-color:#e5e7eb",
+    "background-size:cover",
+    "background-position:center",
+  ].join(";");
+  if (marker.imageUrl) image.style.backgroundImage = `url("${marker.imageUrl}")`;
+  wrapper.appendChild(image);
+
+  const totalPhotoCount = Number.isFinite(marker.totalPhotoCount) ? marker.totalPhotoCount : 0;
+  if (marker.showCountBadge !== false && totalPhotoCount > 1) {
+    const badge = document.createElement("div");
+    badge.textContent = totalPhotoCount > 99 ? "99+" : `${totalPhotoCount}`;
+    badge.style.cssText = [
+      "position:absolute",
+      "right:-4px",
+      "bottom:-4px",
+      "min-width:24px",
+      "height:24px",
+      "padding:0 7px",
+      "border-radius:999px",
+      "background:#FC4C02",
+      "border:2px solid rgba(255,255,255,0.96)",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "font:700 11px/1 system-ui,sans-serif",
+      "color:#fff",
+      "box-shadow:0 8px 20px rgba(252,76,2,0.35)",
+    ].join(";");
+    wrapper.appendChild(badge);
+  }
+
+  return wrapper;
+}
+
 // ---------- Hook ----------
 
-export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, selectedStravaActivityId, routingMode, isMobile, speedMode }) {
+export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, stravaActivitiesGeoJson, selectedStravaActivityId, selectedStravaPhotoMarkers, routingMode, isMobile, speedMode }) {
   const mapRef = useRef(null);
   const appleMapRef = useRef(null);
   const appleMapKitRef = useRef(null);
   const appleMapReadyRef = useRef(false);
   const waypointsRef = useRef([]);
   const markersRef = useRef([]);
+  const stravaPhotoMarkersRef = useRef([]);
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
   const userLocationRef = useRef(null);
@@ -541,6 +630,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       fns.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      stravaPhotoMarkersRef.current.forEach((marker) => marker.remove());
+      stravaPhotoMarkersRef.current = [];
       if (map) map.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -614,8 +705,46 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     const coordinates = feature?.geometry?.coordinates;
     if (!Array.isArray(coordinates) || !coordinates.length) return;
 
-    fitLineStringBounds(map, coordinates, isMobileRef.current);
+    const fitPadding = isMobileRef.current
+      ? { top: 48, right: 18, bottom: 300, left: 18 }
+      : { top: 80, right: 84, bottom: 80, left: 444 };
+
+    fitLineStringBounds(map, coordinates, fitPadding);
   }, [selectedStravaActivityId, stravaActivitiesGeoJson]);
+
+  useEffect(() => {
+    stravaPhotoMarkersRef.current.forEach((marker) => marker.remove());
+    stravaPhotoMarkersRef.current = [];
+
+    const map = mapRef.current;
+    if (!map || !selectedStravaActivityId || !selectedStravaPhotoMarkers?.length) return;
+
+    const feature =
+      stravaActivitiesGeoJson?.features?.find((entry) => entry?.properties?.id === selectedStravaActivityId) ||
+      stravaActivitiesGeoJson?.features?.[0];
+    const coordinates = feature?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || !coordinates.length) return;
+
+    stravaPhotoMarkersRef.current = selectedStravaPhotoMarkers
+      .map((marker, index) => {
+        const fallbackProgress =
+          selectedStravaPhotoMarkers.length === 1
+            ? 0.52
+            : (index + 1) / (selectedStravaPhotoMarkers.length + 1);
+        const coordinate = Array.isArray(marker.coordinate)
+          ? marker.coordinate
+          : getCoordinateAtProgress(coordinates, marker.progress ?? fallbackProgress);
+        if (!Array.isArray(coordinate)) return null;
+
+        return new maplibregl.Marker({
+          element: createStravaPhotoMarkerElement(marker, isMobileRef.current),
+          anchor: "center",
+        })
+          .setLngLat(coordinate)
+          .addTo(map);
+      })
+      .filter(Boolean);
+  }, [selectedStravaActivityId, selectedStravaPhotoMarkers, stravaActivitiesGeoJson]);
 
   // ---------- Routing mode change ----------
   useEffect(() => {

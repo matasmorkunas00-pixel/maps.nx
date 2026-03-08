@@ -102,7 +102,7 @@ function getActivityYear(activity) {
   return Number.isFinite(year) ? year : null;
 }
 
-export function activityToProperties(activity) {
+export function activityToProperties(activity, extras = {}) {
   return {
     id: activity.id,
     name: activity.name,
@@ -132,6 +132,8 @@ export function activityToProperties(activity) {
     description: activity.description || "",
     totalPhotoCount: activity.total_photo_count ?? activity.photos?.count ?? 0,
     primaryPhotoUrls: activity.photos?.primary?.urls || null,
+    heartrateStream: null,
+    ...extras,
   };
 }
 
@@ -152,4 +154,25 @@ export async function fetchActivityDetails(accessToken, activityId) {
   });
   if (!res.ok) throw new Error("Failed to fetch activity details");
   return res.json();
+}
+
+export async function fetchActivityStreams(accessToken, activityId, keys = ["heartrate"]) {
+  const params = new URLSearchParams({
+    keys: keys.join(","),
+    key_by_type: "true",
+  });
+
+  const res = await fetch(`https://www.strava.com/api/v3/activities/${activityId}/streams?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch activity streams");
+  return res.json();
+}
+
+export function getHeartrateStream(streamsPayload) {
+  const values = streamsPayload?.heartrate?.data;
+  if (!Array.isArray(values)) return null;
+
+  const heartrateValues = values.filter((value) => Number.isFinite(value)).map((value) => Number(value));
+  return heartrateValues.length ? heartrateValues : null;
 }
