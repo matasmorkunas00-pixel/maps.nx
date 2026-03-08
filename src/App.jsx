@@ -177,9 +177,6 @@ export default function App() {
       if (!searchBoxRef.current?.contains(event.target)) {
         setIsSearchDropdownOpen(false);
       }
-      if (!quickMenuRef.current?.contains(event.target)) {
-        setActiveMenuPanel(null);
-      }
       if (!styleControlsRef.current?.contains(event.target)) {
         setIsStyleMenuOpen(false);
       }
@@ -803,33 +800,92 @@ export default function App() {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 3,
-            width: isMobile ? "calc(100vw - 20px)" : 320,
+            width: isMobile ? "calc(100vw - 20px)" : 364,
             pointerEvents: "none",
             animation: "route-stats-fade-in 0.22s ease both",
           }}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
-              ({ label, value, unit }) => (
-                <div
-                  key={label}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: "rgba(245,247,250,0.82)",
-                    border: "1px solid rgba(231,235,240,0.85)",
-                    backdropFilter: "blur(8px)",
-                    WebkitBackdropFilter: "blur(8px)",
-                  }}
-                >
-                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
-                  <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#000" }}>
-                    {value}
-                    <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#000" }}>{unit}</span>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 8, alignItems: "stretch" }}>
+            <div style={{ display: "grid", gap: 8, pointerEvents: "auto" }}>
+              <button
+                onClick={undoLast}
+                title="Undo"
+                aria-label="Undo last route point"
+                style={{
+                  width: isMobile ? 36 : 34,
+                  height: isMobile ? 36 : 34,
+                  borderRadius: 10,
+                  border: "1px solid rgba(231,235,240,0.85)",
+                  background: pressedButton === "undo_icon" ? "rgba(224,230,238,0.92)" : "rgba(245,247,250,0.82)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.1)",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "background-color 0.18s ease, transform 0.18s ease",
+                  transform: pressedButton === "undo_icon" ? "scale(0.96)" : "scale(1)",
+                }}
+                {...getPressHandlers("undo_icon")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 8H4V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4 8C5.9 5.9 8.6 4.5 11.7 4.5C17.4 4.5 22 9.1 22 14.8C22 16.2 21.7 17.5 21.2 18.7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button
+                onClick={clearAll}
+                title="Clear route"
+                aria-label="Clear route"
+                style={{
+                  width: isMobile ? 36 : 34,
+                  height: isMobile ? 36 : 34,
+                  borderRadius: 10,
+                  border: "1px solid rgba(231,235,240,0.85)",
+                  background: pressedButton === "clear_icon" ? "rgba(224,230,238,0.92)" : "rgba(245,247,250,0.82)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.1)",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "background-color 0.18s ease, transform 0.18s ease",
+                  transform: pressedButton === "clear_icon" ? "scale(0.96)" : "scale(1)",
+                }}
+                {...getPressHandlers("clear_icon")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 7H19" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
+                  <path d="M9 7V5.8C9 5.36 9.36 5 9.8 5H14.2C14.64 5 15 5.36 15 5.8V7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
+                  <path d="M8 7L8.6 18.2C8.63 18.66 9.02 19 9.48 19H14.52C14.98 19 15.37 18.66 15.4 18.2L16 7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(
+                ({ label, value, unit }) => (
+                  <div
+                    key={label}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "rgba(245,247,250,0.82)",
+                      border: "1px solid rgba(231,235,240,0.85)",
+                      backdropFilter: "blur(8px)",
+                      WebkitBackdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#000" }}>{label}</div>
+                    <div style={{ marginTop: 4, fontSize: isMobile ? 24 : 22, fontWeight: 700, color: "#000" }}>
+                      {value}
+                      <span style={{ marginLeft: 4, fontSize: 14, fontWeight: 500, color: "#000" }}>{unit}</span>
+                    </div>
                   </div>
-                </div>
-              )
-            )}
+                )
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -972,8 +1028,6 @@ export default function App() {
                 <button style={getButtonStyle("new")} onClick={newRoute} {...getPressHandlers("new")}>New</button>
               </div>
               <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <button style={getButtonStyle("undo")} onClick={undoLast} {...getPressHandlers("undo")}>Undo</button>
-                <button style={getButtonStyle("clear")} onClick={clearAll} {...getPressHandlers("clear")}>Clear</button>
                 <button style={getButtonStyle("save", true)} onClick={saveRoute} disabled={isRouting} {...getPressHandlers("save")}>Save</button>
                 <button style={getButtonStyle("export")} onClick={exportGPX} {...getPressHandlers("export")}>Export GPX</button>
               </div>
