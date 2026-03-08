@@ -6,6 +6,8 @@ import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
 import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
+import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
+import { listCloudImportedRoutes, updateCloudImportedRouteColor, uploadCloudImportedRoute } from "./utils/cloudRoutes";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
@@ -57,6 +59,10 @@ export default function App() {
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [isMapModesFlashOn, setIsMapModesFlashOn] = useState(false);
   const [isLocationFlashOn, setIsLocationFlashOn] = useState(false);
+  const [cloudAuthEmail, setCloudAuthEmail] = useState("");
+  const [cloudAuthMessage, setCloudAuthMessage] = useState(null);
+  const [cloudRoutesError, setCloudRoutesError] = useState(null);
+  const [isCloudRoutesLoading, setIsCloudRoutesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
@@ -186,15 +192,28 @@ export default function App() {
     } catch { return []; }
   });
 
-  const [importedRoutes, setImportedRoutes] = useState(() => {
+  const [guestImportedRoutes, setGuestImportedRoutes] = useState(() => {
     try {
       const raw = localStorage.getItem(GPX_LIBRARY_STORAGE_KEY);
       return raw ? JSON.parse(raw).map((r, i) => normalizeImportedRoute(r, i)).filter(Boolean) : [];
     } catch { return []; }
   });
+  const [cloudImportedRoutes, setCloudImportedRoutes] = useState([]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(routes)); }, [routes]);
-  useEffect(() => { localStorage.setItem(GPX_LIBRARY_STORAGE_KEY, JSON.stringify(importedRoutes)); }, [importedRoutes]);
+  useEffect(() => { localStorage.setItem(GPX_LIBRARY_STORAGE_KEY, JSON.stringify(guestImportedRoutes)); }, [guestImportedRoutes]);
+
+  const {
+    isConfigured: isSupabaseConfigured,
+    isReady: isSupabaseAuthReady,
+    user: supabaseUser,
+    userEmail: supabaseUserEmail,
+    sendMagicLink,
+    signOut: signOutOfSupabase,
+  } = useSupabaseAuth();
+
+  const isCloudLibraryActive = isSupabaseConfigured && !!supabaseUser;
+  const importedRoutes = isCloudLibraryActive ? cloudImportedRoutes : guestImportedRoutes;
 
   const availableFolders = useMemo(
     () =>
@@ -216,6 +235,39 @@ export default function App() {
     () => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders),
     [importedRoutes, activeVisibleFolders]
   );
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isSupabaseAuthReady) return;
+
+    if (!supabaseUser) {
+      setCloudImportedRoutes([]);
+      setCloudRoutesError(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadCloudRoutes = async () => {
+      setIsCloudRoutesLoading(true);
+      setCloudRoutesError(null);
+      try {
+        const routesFromCloud = await listCloudImportedRoutes(supabaseUser.id);
+        if (!isCancelled) setCloudImportedRoutes(routesFromCloud);
+      } catch (error) {
+        if (!isCancelled) {
+          setCloudRoutesError(`Failed to load cloud GPX library: ${error?.message || "Unknown error"}`);
+        }
+      } finally {
+        if (!isCancelled) setIsCloudRoutesLoading(false);
+      }
+    };
+
+    loadCloudRoutes();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
   const {
     distanceKm,
@@ -303,6 +355,40 @@ export default function App() {
     const folder = importFolderName.trim();
     if (!files.length || !folder) return;
 
+    if (isCloudLibraryActive && supabaseUser) {
+      setIsCloudRoutesLoading(true);
+      setCloudRoutesError(null);
+      try {
+        const uploadedRoutes = (
+          await Promise.all(
+            files.map((file, index) =>
+              uploadCloudImportedRoute({
+                userId: supabaseUser.id,
+                file,
+                folder,
+                color: getDefaultRouteColor(index),
+                index,
+              })
+            )
+          )
+        ).filter(Boolean);
+
+        if (uploadedRoutes.length) {
+          setCloudImportedRoutes((current) => [...uploadedRoutes, ...current]);
+          setVisibleFolders((current) => {
+            if (current === null) return null;
+            return current.includes(folder) ? current : [...current, folder];
+          });
+        }
+      } catch (error) {
+        setCloudRoutesError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`);
+      } finally {
+        setIsCloudRoutesLoading(false);
+        event.target.value = "";
+      }
+      return;
+    }
+
     const parsedRoutes = (
       await Promise.all(
         files.map(async (file, index) => {
@@ -323,7 +409,7 @@ export default function App() {
     ).filter(Boolean);
 
     if (!parsedRoutes.length) { event.target.value = ""; return; }
-    setImportedRoutes((current) => [...parsedRoutes, ...current]);
+    setGuestImportedRoutes((current) => [...parsedRoutes, ...current]);
     setVisibleFolders((current) => {
       if (current === null) return null;
       return current.includes(folder) ? current : [...current, folder];
@@ -339,7 +425,55 @@ export default function App() {
   };
 
   const updateImportedRouteColor = (routeId, color) => {
-    setImportedRoutes((current) => current.map((r) => (r.id === routeId ? { ...r, color } : r)));
+    if (isCloudLibraryActive) {
+      const previousColor = cloudImportedRoutes.find((route) => route.id === routeId)?.color;
+      setCloudRoutesError(null);
+      setCloudImportedRoutes((current) => current.map((route) => (route.id === routeId ? { ...route, color } : route)));
+      updateCloudImportedRouteColor(routeId, color).catch((error) => {
+        setCloudImportedRoutes((current) =>
+          current.map((route) => (route.id === routeId ? { ...route, color: previousColor || route.color } : route))
+        );
+        setCloudRoutesError(`Failed to update cloud route color: ${error?.message || "Unknown error"}`);
+      });
+      return;
+    }
+
+    setGuestImportedRoutes((current) => current.map((route) => (route.id === routeId ? { ...route, color } : route)));
+  };
+
+  const refreshCloudRoutes = async () => {
+    if (!supabaseUser) return;
+    setIsCloudRoutesLoading(true);
+    setCloudRoutesError(null);
+    try {
+      const routesFromCloud = await listCloudImportedRoutes(supabaseUser.id);
+      setCloudImportedRoutes(routesFromCloud);
+    } catch (error) {
+      setCloudRoutesError(`Failed to refresh cloud GPX library: ${error?.message || "Unknown error"}`);
+    } finally {
+      setIsCloudRoutesLoading(false);
+    }
+  };
+
+  const handleCloudSignIn = async () => {
+    setCloudRoutesError(null);
+    setCloudAuthMessage(null);
+    try {
+      const email = await sendMagicLink(cloudAuthEmail);
+      setCloudAuthMessage(`Magic link sent to ${email}`);
+    } catch (error) {
+      setCloudRoutesError(`Failed to send sign-in link: ${error?.message || "Unknown error"}`);
+    }
+  };
+
+  const handleCloudSignOut = async () => {
+    setCloudRoutesError(null);
+    setCloudAuthMessage(null);
+    try {
+      await signOutOfSupabase();
+    } catch (error) {
+      setCloudRoutesError(`Failed to sign out: ${error?.message || "Unknown error"}`);
+    }
   };
 
   const getSearchResultLabels = (feature) => {
@@ -828,6 +962,85 @@ export default function App() {
           </button>
           {activeMenuPanel === "library" && (
             <div style={expandedMenuFloatingStyle}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "rgba(245,247,250,0.92)",
+                  border: "1px solid rgba(231,235,240,0.92)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <strong style={{ fontSize: 13, color: "#24364b" }}>Cloud sync</strong>
+                  {isSupabaseConfigured && isSupabaseAuthReady && supabaseUserEmail && (
+                    <span style={{ fontSize: 11, color: "#64748b" }}>Signed in</span>
+                  )}
+                </div>
+
+                {!isSupabaseConfigured ? (
+                  <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
+                    Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to enable per-user GPX sync.
+                  </div>
+                ) : !isSupabaseAuthReady ? (
+                  <div style={{ fontSize: 12, color: "#64748b" }}>Checking your session...</div>
+                ) : supabaseUser ? (
+                  <>
+                    <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.45 }}>
+                      Syncing as <strong>{supabaseUserEmail}</strong>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        style={getButtonStyle("cloud_refresh")}
+                        onClick={refreshCloudRoutes}
+                        disabled={isCloudRoutesLoading}
+                        {...getPressHandlers("cloud_refresh")}
+                      >
+                        {isCloudRoutesLoading ? "Syncing..." : "Refresh"}
+                      </button>
+                      <button
+                        style={getButtonStyle("cloud_signout")}
+                        onClick={handleCloudSignOut}
+                        {...getPressHandlers("cloud_signout")}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={cloudAuthEmail}
+                      onChange={(event) => setCloudAuthEmail(event.target.value)}
+                      placeholder="Email for cloud sync"
+                      style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
+                    />
+                    <button
+                      style={getButtonStyle("cloud_signin", true)}
+                      onClick={handleCloudSignIn}
+                      {...getPressHandlers("cloud_signin")}
+                    >
+                      Email me a sign-in link
+                    </button>
+                    <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
+                      Uploads stay in this browser until you sign in. After sign-in, new GPX files sync to your account.
+                    </div>
+                  </>
+                )}
+
+                {cloudAuthMessage && (
+                  <div style={{ fontSize: 12, color: "#166534", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 10px" }}>
+                    {cloudAuthMessage}
+                  </div>
+                )}
+                {cloudRoutesError && (
+                  <div style={{ fontSize: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px" }}>
+                    {cloudRoutesError}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: "grid", gap: 8 }}>
                 <input
                   value={importFolderName}
@@ -835,9 +1048,21 @@ export default function App() {
                   placeholder="Folder name, e.g. 2024"
                   style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
                 />
-                <button style={getButtonStyle("upload")} onClick={() => gpxFileInputRef.current?.click()} {...getPressHandlers("upload")}>
-                  Upload GPX files
+                <button
+                  style={getButtonStyle("upload")}
+                  onClick={() => gpxFileInputRef.current?.click()}
+                  disabled={isCloudRoutesLoading}
+                  {...getPressHandlers("upload")}
+                >
+                  {isCloudLibraryActive ? "Upload GPX files to cloud" : "Upload GPX files"}
                 </button>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+                {isCloudLibraryActive
+                  ? `${cloudImportedRoutes.length} routes synced to your account`
+                  : isSupabaseConfigured
+                    ? "Current GPX library is local to this browser until you sign in."
+                    : "Current GPX library is stored only in this browser."}
               </div>
               {availableFolders.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
