@@ -353,19 +353,19 @@ function createMarkerElement(rainbow = false) {
   return el;
 }
 
-// ---------- Elevation ----------
-
-function calculateElevationGain(geojson) {
+function calculateElevationProfile(geojson) {
   const coords = geojson?.features?.[0]?.geometry?.coordinates;
-  if (!coords || coords.length < 3) return 0;
+  if (!coords || coords.length < 3) return { gain: 0, loss: 0 };
   const THRESHOLD = 3;
   const filtered = getFilteredElevations(coords);
-  let total = 0;
+  let gain = 0;
+  let loss = 0;
   for (let i = 1; i < filtered.length; i++) {
     const diff = filtered[i] - filtered[i - 1];
-    if (diff > THRESHOLD) total += diff;
+    if (diff > THRESHOLD) gain += diff;
+    if (diff < -THRESHOLD) loss += Math.abs(diff);
   }
-  return total;
+  return { gain, loss };
 }
 
 // ---------- Hook ----------
@@ -391,6 +391,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
   const [distanceKm, setDistanceKm] = useState("0.00");
   const [elevationGainM, setElevationGainM] = useState("0");
+  const [elevationLossM, setElevationLossM] = useState("0");
   const [routeGeoJson, setRouteGeoJson] = useState(null);
   const [locationState, setLocationState] = useState({ status: "idle", message: "Location off" });
   const [isRouting, setIsRouting] = useState(false);
@@ -581,6 +582,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         setRouteGeoJson(null);
         setDistanceKm("0.00");
         setElevationGainM("0");
+        setElevationLossM("0");
         clearRouteLayer();
       }
 
@@ -625,8 +627,10 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           setRouteGeoJson(data);
 
           const summary = data.features[0].properties?.summary || {};
+          const { gain, loss } = calculateElevationProfile(data);
           setDistanceKm(((summary.distance || 0) / 1000).toFixed(2));
-          setElevationGainM(calculateElevationGain(data).toFixed(0));
+          setElevationGainM(gain.toFixed(0));
+          setElevationLossM(loss.toFixed(0));
 
           addRouteLayers(map, data);
         } catch (err) {
@@ -954,7 +958,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     routeDataRef.current = savedRoute.routeGeoJson || null;
 
     setDistanceKm(String(savedRoute.distanceKm || "0.00"));
-    setElevationGainM(String(savedRoute.elevationGainM || "0"));
+    const { gain, loss } = calculateElevationProfile(savedRoute.routeGeoJson);
+    setElevationGainM(gain.toFixed(0));
+    setElevationLossM(loss.toFixed(0));
     setRouteGeoJson(savedRoute.routeGeoJson || null);
 
     fns.current?.renderMarkers();
@@ -992,6 +998,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   return {
     distanceKm,
     elevationGainM,
+    elevationLossM,
     routeGeoJson,
     locationState,
     isRouting,
