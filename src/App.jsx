@@ -87,6 +87,50 @@ function formatActivityDate(dateString) {
   });
 }
 
+function formatHeartRate(bpm) {
+  if (!Number.isFinite(bpm)) return "-";
+  return `${Math.round(bpm)} bpm`;
+}
+
+function sampleSeries(values, maxPoints = 72) {
+  if (!Array.isArray(values) || values.length <= maxPoints) return values;
+  const step = values.length / maxPoints;
+  return Array.from({ length: maxPoints }, (_, index) => values[Math.min(values.length - 1, Math.floor(index * step))]);
+}
+
+function buildSparkline(values, width = 320, height = 112, padding = 10) {
+  if (!Array.isArray(values) || values.length < 2) return null;
+
+  const sampled = sampleSeries(values, 72);
+  const minValue = Math.min(...sampled);
+  const maxValue = Math.max(...sampled);
+  const domainMin = Math.min(minValue, 90);
+  const domainMax = Math.max(maxValue, domainMin + 20);
+  const range = Math.max(domainMax - domainMin, 1);
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+
+  const points = sampled.map((value, index) => {
+    const x = padding + (innerWidth * index) / Math.max(sampled.length - 1, 1);
+    const y = height - padding - ((value - domainMin) / range) * innerHeight;
+    return [x, y];
+  });
+
+  const linePath = points
+    .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${points[points.length - 1][0].toFixed(2)},${(height - padding).toFixed(2)} L${points[0][0].toFixed(2)},${(height - padding).toFixed(2)} Z`;
+
+  return {
+    linePath,
+    areaPath,
+    minValue,
+    maxValue,
+    latestValue: sampled[sampled.length - 1],
+    averageValue: sampled.reduce((sum, value) => sum + value, 0) / sampled.length,
+  };
+}
+
 export default function App() {
   const appleMapContainerRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -406,31 +450,54 @@ export default function App() {
   const selectedStravaStats = useMemo(() => {
     if (!selectedStravaActivity) return [];
 
-    const stats = [
+    return [
       { label: "Distance", value: formatDistanceKm(selectedStravaActivity.distance) },
       { label: "Moving time", value: formatDuration(selectedStravaActivity.moving_time) },
       { label: "Elapsed time", value: formatDuration(selectedStravaActivity.elapsedTime) },
       { label: "Elevation", value: formatMeters(selectedStravaActivity.totalElevationGain) },
       { label: "Avg speed", value: formatSpeed(selectedStravaActivity.averageSpeed) },
       { label: "Max speed", value: formatSpeed(selectedStravaActivity.maxSpeed) },
-      { label: "Avg heart rate", value: Number.isFinite(selectedStravaActivity.averageHeartrate) ? `${Math.round(selectedStravaActivity.averageHeartrate)} bpm` : "-" },
-      { label: "Max heart rate", value: Number.isFinite(selectedStravaActivity.maxHeartrate) ? `${Math.round(selectedStravaActivity.maxHeartrate)} bpm` : "-" },
-      { label: "Calories", value: Number.isFinite(selectedStravaActivity.calories) ? formatNumber(selectedStravaActivity.calories) : "-" },
-      { label: "Kudos", value: Number.isFinite(selectedStravaActivity.kudosCount) ? formatNumber(selectedStravaActivity.kudosCount) : "-" },
-      { label: "Achievements", value: Number.isFinite(selectedStravaActivity.achievementCount) ? formatNumber(selectedStravaActivity.achievementCount) : "-" },
-      { label: "Photos", value: Number.isFinite(selectedStravaActivity.totalPhotoCount) ? formatNumber(selectedStravaActivity.totalPhotoCount) : "-" },
-      { label: "Avg watts", value: Number.isFinite(selectedStravaActivity.averageWatts) ? `${Math.round(selectedStravaActivity.averageWatts)} W` : "-" },
-      { label: "Energy", value: Number.isFinite(selectedStravaActivity.kilojoules) ? `${formatNumber(selectedStravaActivity.kilojoules)} kJ` : "-" },
     ];
-
-    return stats.filter((stat) => stat.value !== "-");
   }, [selectedStravaActivity]);
+  const selectedStravaDescription = selectedStravaActivity?.description?.trim() || "";
+  const selectedStravaHeartrateStream = useMemo(() => {
+    if (!Array.isArray(selectedStravaActivity?.heartrateStream)) return [];
+    return selectedStravaActivity.heartrateStream.filter((value) => Number.isFinite(value));
+  }, [selectedStravaActivity]);
+  const selectedStravaHeartRateChart = useMemo(
+    () => buildSparkline(selectedStravaHeartrateStream),
+    [selectedStravaHeartrateStream]
+  );
+  const selectedStravaAverageHeartRate = Number.isFinite(selectedStravaActivity?.averageHeartrate)
+    ? selectedStravaActivity.averageHeartrate
+    : selectedStravaHeartRateChart?.averageValue ?? null;
+  const selectedStravaMaxHeartRate = Number.isFinite(selectedStravaActivity?.maxHeartrate)
+    ? selectedStravaActivity.maxHeartrate
+    : selectedStravaHeartRateChart?.maxValue ?? null;
+  const selectedStravaLatestHeartRate = selectedStravaHeartRateChart?.latestValue ?? null;
 
   const selectedStravaPrimaryPhotoUrl = useMemo(() => {
     const urls = selectedStravaActivity?.primaryPhotoUrls;
     if (!urls || typeof urls !== "object") return null;
     return urls["600"] || urls["2800"] || urls["100"] || Object.values(urls)[0] || null;
   }, [selectedStravaActivity]);
+  const selectedStravaPhotoMarkers = useMemo(() => {
+    if (!selectedStravaActivity?.id || !selectedStravaPrimaryPhotoUrl) return [];
+
+    const totalPhotoCount = Number.isFinite(selectedStravaActivity.totalPhotoCount)
+      ? Math.max(1, selectedStravaActivity.totalPhotoCount)
+      : 1;
+
+    return [
+      {
+        id: `${selectedStravaActivity.id}-primary-photo`,
+        imageUrl: selectedStravaPrimaryPhotoUrl,
+        totalPhotoCount,
+        progress: 0.52,
+        showCountBadge: false,
+      },
+    ];
+  }, [selectedStravaActivity, selectedStravaPrimaryPhotoUrl]);
 
   useEffect(() => {
     if (!selectedStravaActivity) return;
@@ -485,6 +552,7 @@ export default function App() {
     importedRoutesGeoJson,
     stravaActivitiesGeoJson: mapStravaActivitiesGeoJson,
     selectedStravaActivityId,
+    selectedStravaPhotoMarkers,
     routingMode,
     isMobile,
     speedMode,
@@ -615,6 +683,8 @@ export default function App() {
     event.preventDefault();
     if (!searchResults.length) return;
     await handleSearchSelect(searchResults[0]);
+  };
+
   const toggleStravaTypeVisibility = (type) => {
     setVisibleStravaTypes((current) => {
       const base = current === null ? availableStravaTypes : current;
@@ -709,6 +779,7 @@ export default function App() {
     WebkitTapHighlightColor: "transparent",
     transform: activeMenuPanel === panelKey ? "scale(0.97)" : "scale(1)",
   });
+  const isStravaActivityOpen = !!selectedStravaActivity;
 
   // ---------- Render ----------
 
@@ -735,6 +806,132 @@ export default function App() {
       </div>
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
+      <div style={{ ...panelStyle, display: isStravaActivityOpen ? "none" : undefined }}>
+        <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
+
+        <div ref={searchBoxRef} style={{ position: "relative", marginBottom: 10 }}>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => {
+              if (searchResults.length || searchQuery.trim().length >= 2) setIsSearchDropdownOpen(true);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search address, shops, tourist places..."
+            style={{ ...inputStyle, width: "100%", padding: isMobile ? "12px 42px 12px 12px" : "11px 40px 11px 12px", boxSizing: "border-box" }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#506176",
+              pointerEvents: "none",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {isSearchDropdownOpen && (isSearchLoading || searchResults.length > 0 || searchQuery.trim().length >= 2) && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                zIndex: 4,
+                borderRadius: 12,
+                border: "1px solid rgba(15, 23, 42, 0.12)",
+                background: "rgba(255,255,255,0.94)",
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                overflow: "hidden",
+              }}
+            >
+              {isSearchLoading ? (
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>Searching places...</div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "#506176" }}>No places found</div>
+              ) : (
+                <div style={{ maxHeight: 230, overflowY: "auto" }}>
+                  {searchResults.map((feature) => {
+                    const { primary, secondary } = getSearchResultLabels(feature);
+                    return (
+                      <button
+                        key={`${feature.id || feature.place_name}-${feature.center[0]}-${feature.center[1]}`}
+                        onClick={() => handleSearchSelect(feature)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          border: "none",
+                          background: "transparent",
+                          padding: "10px 12px",
+                          cursor: "pointer",
+                          borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>{primary}</div>
+                        {secondary && <div style={{ marginTop: 2, fontSize: 12, color: "#64748b" }}>{secondary}</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchError && (
+            <div style={{ marginTop: 6, fontSize: 12, color: "#b91c1c" }}>
+              {searchError}
+            </div>
+          )}
+        </div>
+
+        {routingError && (
+          <div style={{
+            marginBottom: 10,
+            padding: "10px 12px",
+            borderRadius: 10,
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            color: "#000",
+            fontSize: 13,
+          }}>
+            {routingError}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            value={routeName}
+            onChange={(e) => setRouteName(e.target.value)}
+            placeholder="Route name"
+            style={{ ...inputStyle, flex: 1, padding: isMobile ? 12 : 11 }}
+          />
+          <button style={getButtonStyle("new")} onClick={newRoute} title="Start a fresh route" {...getPressHandlers("new")}>
+            New
+          </button>
+        </div>
+
+        <div style={{
+          marginTop: 10,
+          display: "grid",
+          gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+          gap: 8,
+        }}>
+          <button style={getButtonStyle("undo")} onClick={undoLast} {...getPressHandlers("undo")}>Undo</button>
+          <button style={getButtonStyle("clear")} onClick={clearAll} {...getPressHandlers("clear")}>Clear</button>
+          <button style={getButtonStyle("save", true)} onClick={saveRoute} disabled={isRouting} {...getPressHandlers("save")}>
+            Save
+          </button>
+          <button style={getButtonStyle("export")} onClick={exportGPX} {...getPressHandlers("export")}>Export GPX</button>
+        </div>
 
       {activeMenuPanel === "route" && (
         <div
@@ -1201,7 +1398,7 @@ export default function App() {
           left: 10,
           bottom: isMobile ? 108 : 10,
           zIndex: 2,
-          display: "grid",
+          display: isStravaActivityOpen ? "none" : "grid",
           gap: 8,
         }}
       >
@@ -1469,32 +1666,36 @@ export default function App() {
 
       {selectedStravaActivity && stravaConnected && (
         <div
-          onClick={closeStravaActivityModal}
           style={{
             position: "fixed",
-            inset: 0,
             zIndex: 30,
-            background: "rgba(15, 23, 42, 0.42)",
-            display: "grid",
-            placeItems: "center",
-            padding: isMobile ? 16 : 24,
+            pointerEvents: "none",
+            top: isMobile ? "auto" : 18,
+            left: isMobile ? 12 : 18,
+            bottom: 12,
+            right: isMobile ? 12 : "auto",
+            display: "flex",
+            alignItems: isMobile ? "flex-end" : "flex-start",
+            justifyContent: isMobile ? "center" : "flex-start",
           }}
         >
           <div
-            onClick={(event) => event.stopPropagation()}
             style={{
+              pointerEvents: "auto",
               width: "100%",
-              maxWidth: 420,
-              maxHeight: "78vh",
+              maxWidth: isMobile ? "100%" : 376,
+              maxHeight: isMobile ? "52vh" : "calc(100vh - 36px)",
               overflowY: "auto",
-              borderRadius: 18,
-              background: "rgba(255,255,255,0.98)",
-              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.28)",
-              border: "1px solid rgba(15, 23, 42, 0.08)",
-              padding: isMobile ? 14 : 16,
+              borderRadius: isMobile ? 18 : 20,
+              background: "rgba(255,255,255,0.94)",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
+              border: "1px solid rgba(255,255,255,0.72)",
+              backdropFilter: "blur(18px)",
+              WebkitBackdropFilter: "blur(18px)",
+              padding: isMobile ? 12 : 16,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span
@@ -1502,10 +1703,10 @@ export default function App() {
                       display: "inline-flex",
                       alignItems: "center",
                       borderRadius: 999,
-                      padding: "5px 9px",
-                      background: "rgba(252,76,2,0.1)",
+                      padding: "4px 8px",
+                      background: "rgba(252,76,2,0.12)",
                       color: "#FC4C02",
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
@@ -1517,10 +1718,10 @@ export default function App() {
                     <span style={{ fontSize: 12, color: "#6b7a8c" }}>{selectedStravaActivity.year}</span>
                   )}
                 </div>
-                <div style={{ marginTop: 10, fontSize: isMobile ? 22 : 24, fontWeight: 800, color: "#24364b", lineHeight: 1.15 }}>
+                <div style={{ marginTop: 8, fontSize: isMobile ? 18 : 20, fontWeight: 800, color: "#24364b", lineHeight: 1.15 }}>
                   {selectedStravaActivity.name || "Unnamed activity"}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 13, color: "#5c6c7c" }}>
+                <div style={{ marginTop: 5, fontSize: 12, color: "#5c6c7c" }}>
                   {formatActivityDate(selectedStravaActivity.startDateLocal || selectedStravaActivity.startDate)}
                 </div>
               </div>
@@ -1528,13 +1729,13 @@ export default function App() {
               <button
                 onClick={closeStravaActivityModal}
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   borderRadius: 999,
-                  border: "1px solid #d7dce3",
-                  background: "#fff",
+                  border: "1px solid rgba(15, 23, 42, 0.08)",
+                  background: "rgba(255,255,255,0.9)",
                   cursor: "pointer",
-                  fontSize: 18,
+                  fontSize: 17,
                   lineHeight: 1,
                   color: "#24364b",
                   flexShrink: 0,
@@ -1546,68 +1747,132 @@ export default function App() {
             </div>
 
             {selectedStravaPrimaryPhotoUrl && (
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 12 }}>
                 <img
                   src={selectedStravaPrimaryPhotoUrl}
                   alt={selectedStravaActivity.name || "Strava activity"}
                   style={{
                     width: "100%",
-                    maxHeight: 200,
+                    maxHeight: isMobile ? 132 : 148,
                     objectFit: "cover",
                     borderRadius: 14,
                     display: "block",
-                    border: "1px solid #e7ebf0",
+                    border: "1px solid rgba(231,235,240,0.9)",
                   }}
                 />
               </div>
             )}
 
+            {selectedStravaDescription && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  background: "rgba(248,250,252,0.8)",
+                  border: "1px solid rgba(231,235,240,0.9)",
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: "#425466",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {selectedStravaDescription}
+              </div>
+            )}
+
             {isStravaActivityLoading && (
-              <div style={{ marginTop: 12, fontSize: 12, color: "#6b7a8c" }}>
+              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7a8c" }}>
                 Loading activity details...
               </div>
             )}
 
-            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
               {selectedStravaStats.map((stat) => (
                 <div
                   key={stat.label}
                   style={{
-                    padding: "9px 10px",
+                    padding: "8px 9px",
                     borderRadius: 12,
-                    background: "#f5f7fa",
-                    border: "1px solid #e7ebf0",
+                    background: "rgba(245,247,250,0.82)",
+                    border: "1px solid rgba(231,235,240,0.9)",
                   }}
                 >
                   <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b7a8c" }}>
                     {stat.label}
                   </div>
-                  <div style={{ marginTop: 5, fontSize: 15, fontWeight: 700, color: "#24364b" }}>
+                  <div style={{ marginTop: 4, fontSize: isMobile ? 12 : 14, fontWeight: 700, color: "#24364b" }}>
                     {stat.value}
                   </div>
                 </div>
               ))}
             </div>
 
-            {selectedStravaActivity.description && (
-              <div
-                style={{
-                  marginTop: 14,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  background: "#f8fafc",
-                  border: "1px solid #e7ebf0",
-                  fontSize: 13,
-                  lineHeight: 1.45,
-                  color: "#425466",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {selectedStravaActivity.description}
+            <div
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                background: "rgba(15,23,42,0.94)",
+                color: "#fff",
+                padding: "12px 12px 10px",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.62)" }}>
+                    Heart rate
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 24, fontWeight: 800, lineHeight: 1 }}>
+                    {formatHeartRate(selectedStravaLatestHeartRate)}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: 6, textAlign: "right" }}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
+                    Avg <strong style={{ color: "#fff" }}>{formatHeartRate(selectedStravaAverageHeartRate)}</strong>
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
+                    Max <strong style={{ color: "#fff" }}>{formatHeartRate(selectedStravaMaxHeartRate)}</strong>
+                  </div>
+                </div>
               </div>
-            )}
 
-            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {selectedStravaHeartRateChart ? (
+                <div style={{ marginTop: 12 }}>
+                  <svg viewBox="0 0 320 112" width="100%" height="108" aria-label="Heart rate chart" role="img">
+                    <defs>
+                      <linearGradient id="stravaHeartRateFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(248,113,113,0.55)" />
+                        <stop offset="100%" stopColor="rgba(248,113,113,0.04)" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="10" y1="28" x2="310" y2="28" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                    <line x1="10" y1="56" x2="310" y2="56" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                    <line x1="10" y1="84" x2="310" y2="84" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+                    <path d={selectedStravaHeartRateChart.areaPath} fill="url(#stravaHeartRateFill)" />
+                    <path
+                      d={selectedStravaHeartRateChart.linePath}
+                      fill="none"
+                      stroke="#fb7185"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+              ) : (
+                <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                  No heart rate stream recorded for this activity.
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Number.isFinite(selectedStravaActivity.totalPhotoCount) && selectedStravaActivity.totalPhotoCount > 0 && (
+                <span style={{ padding: "6px 10px", borderRadius: 999, background: "#fff7ed", color: "#c2410c", fontSize: 12, fontWeight: 600 }}>
+                  {formatNumber(selectedStravaActivity.totalPhotoCount)} photos
+                </span>
+              )}
               {selectedStravaActivity.trainer && (
                 <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eef2ff", color: "#3847a8", fontSize: 12, fontWeight: 600 }}>
                   Trainer ride
