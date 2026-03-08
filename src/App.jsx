@@ -220,6 +220,7 @@ export default function App() {
   const {
     distanceKm,
     elevationGainM,
+    elevationLossM,
     routeGeoJson,
     locationState,
     isRouting,
@@ -241,6 +242,12 @@ export default function App() {
     speedMode,
   });
 
+  useEffect(() => {
+    if (waypointsRef.current.length > 0 && activeMenuPanel !== "route") {
+      setActiveMenuPanel("route");
+    }
+  }, [waypointsRef.current.length, activeMenuPanel]);
+
   // ---------- Route management ----------
 
   const saveRoute = () => {
@@ -254,6 +261,7 @@ export default function App() {
       routeGeoJson: routeDataRef.current,
       distanceKm,
       elevationGainM,
+      elevationLossM,
     };
     setRoutes((prev) => {
       const exists = prev.find((r) => r.id === entry.id);
@@ -672,9 +680,14 @@ export default function App() {
             boxSizing: "border-box",
             boxShadow: "0 -5px 15px rgba(0,0,0,0.1)",
             pointerEvents: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
           }}
         >
-          <ElevationChart routeGeoJson={routeGeoJson} />
+          <div style={{ flex: 1, height: '100%' }}>
+            <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} />
+          </div>
         </div>
       )}
 

@@ -1,0 +1,14 @@
+# Ignore dependencies
+node_modules/
+package-lock.json
+
+# Ignore build outputs (Vite usually uses 'dist')
+dist/
+build/
+
+# Ignore static assets (Gemini doesn't need to read your images)
+public/
+src/assets/
+
+# Ignore git history
+.git/
