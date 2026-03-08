@@ -370,7 +370,7 @@ function calculateElevationProfile(geojson) {
 
 // ---------- Hook ----------
 
-export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode }) {
+export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, onFirstClick }) {
   const mapRef = useRef(null);
   const appleMapRef = useRef(null);
   const appleMapKitRef = useRef(null);
@@ -382,6 +382,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const userLocationRef = useRef(null);
   const userMarkerRef = useRef(null);
   const currentMapStyleRef = useRef(getBaseStyleKey(mapStyle, false));
+  const onFirstClickRef = useRef(onFirstClick);
+  useEffect(() => { onFirstClickRef.current = onFirstClick; }, [onFirstClick]);
 
   // Mutable refs so stable callbacks always see the latest values
   const routingModeRef = useRef(routingMode);
@@ -641,7 +643,24 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         }
       }
 
-      fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer };
+      const addWaypoint = (lng, lat) => {
+        const index = waypointsRef.current.length;
+        waypointsRef.current.push([lng, lat]);
+
+        const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(map);
+        marker.on("dragend", () => {
+          const p = marker.getLngLat();
+          waypointsRef.current[index] = [p.lng, p.lat];
+          fns.current.calculateRoute();
+        });
+        attachRemovePopup(marker);
+        markersRef.current.push(marker);
+        fns.current.calculateRoute();
+      };
+
+      fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint };
 
     // --- Map events ---
     map.on("load", () => {
@@ -657,6 +676,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
       map.on("click", (e) => {
         if (e.originalEvent.target.closest(".maplibregl-marker")) return;
+
+        // Handle clicks on existing route line to insert a new waypoint
+        const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
         const hits = map.getLayer("route-hit-area")
           ? map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] })
           : [];
@@ -671,24 +693,16 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
             return;
           }
         }
-
-          const { lng, lat } = e.lngLat;
-          const index = waypointsRef.current.length;
-          waypointsRef.current.push([lng, lat]);
-
-          const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true })
-            .setLngLat([lng, lat])
-            .addTo(map);
-          marker.on("dragend", () => {
-            const p = marker.getLngLat();
-            waypointsRef.current[index] = [p.lng, p.lat];
-            calculateRoute();
-          });
-          attachRemovePopup(marker);
-          markersRef.current.push(marker);
-          calculateRoute();
-        });
+        
+        // Handle adding a new waypoint
+        const { lng, lat } = e.lngLat;
+        if (waypointsRef.current.length === 0 && onFirstClickRef.current) {
+          onFirstClickRef.current({ lng, lat });
+        } else {
+          addWaypoint(lng, lat);
+        }
       });
+    });
     };
 
     if (typeof navigator !== "undefined" && navigator.geolocation) {
@@ -995,6 +1009,26 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     }
   }, []);
 
+  const addWaypoint = useCallback((lng, lat) => {
+    fns.current?.addWaypoint(lng, lat);
+  }, []);
+
+  const getCurrentLocation = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      if (Array.isArray(userLocationRef.current)) {
+        return resolve(userLocationRef.current);
+      }
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        return reject(new Error("Geolocation is not supported by this browser."));
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve([position.coords.longitude, position.coords.latitude]),
+        (error) => reject(error),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
+      );
+    });
+  }, []);
+
   return {
     distanceKm,
     elevationGainM,
@@ -1011,5 +1045,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     routeToDestination,
     loadRouteOnMap,
     getMapViewport,
+    addWaypoint,
+    getCurrentLocation,
   };
 }
