@@ -352,8 +352,11 @@ export default function App() {
 
   const handleGpxUpload = async (event) => {
     const files = Array.from(event.target.files || []);
-    const folder = importFolderName.trim();
-    if (!files.length || !folder) return;
+    const folder = importFolderName.trim() || "Imported";
+    if (!files.length) {
+      event.target.value = "";
+      return;
+    }
 
     if (isCloudLibraryActive && supabaseUser) {
       setIsCloudRoutesLoading(true);
@@ -1067,6 +1070,9 @@ export default function App() {
                   placeholder="Folder name, e.g. 2024"
                   style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
                 />
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: -2 }}>
+                  Leave empty to save into <strong>Imported</strong>.
+                </div>
                 <button
                   style={getButtonStyle("upload")}
                   onClick={() => gpxFileInputRef.current?.click()}
