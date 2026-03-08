@@ -38,9 +38,12 @@ In the Supabase SQL editor, run:
 That creates:
 
 - `public.gpx_routes`
+- `public.gpx_folders`
 - row-level security policies
 - private storage bucket `gpx-files`
 - storage policies so each user can only access their own files
+
+If you already ran the older SQL setup, run `supabase/setup.sql` again after pulling updates. It is idempotent and now includes cloud folder support.
 
 ### 3. Add env vars
 
