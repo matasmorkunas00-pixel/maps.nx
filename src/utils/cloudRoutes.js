@@ -194,3 +194,34 @@ export async function updateCloudImportedRouteFolder(routeId, folder) {
 
   if (error) throw error;
 }
+
+export async function updateCloudImportedRoutesFolder(routeIds, folder) {
+  const client = ensureSupabase();
+  const normalizedIds = Array.isArray(routeIds) ? routeIds.filter(Boolean) : [];
+  if (!normalizedIds.length) return;
+
+  const { error } = await client
+    .from(GPX_ROUTES_TABLE)
+    .update({ folder: normalizeFolderName(folder) })
+    .in("id", normalizedIds);
+
+  if (error) throw error;
+}
+
+export async function deleteCloudFolder({ userId, name, allowMissingTable = false }) {
+  const client = ensureSupabase();
+  const folderName = normalizeFolderName(name);
+
+  const { error } = await client
+    .from(GPX_FOLDERS_TABLE)
+    .delete()
+    .eq("user_id", userId)
+    .eq("name", folderName);
+
+  if (error) {
+    if (allowMissingTable && isMissingCloudFoldersTableError(error)) {
+      return;
+    }
+    throw error;
+  }
+}

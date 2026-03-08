@@ -7,7 +7,7 @@ import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson
 import { ElevationChart } from "./components/ElevationChart";
 import { useMap } from "./hooks/useMap";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
-import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRouteFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
+import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRoutesFolder, deleteCloudFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
@@ -79,10 +79,11 @@ export default function App() {
   const [routingMode, setRoutingMode] = useState("gravel");
   const [mapStyle, setMapStyle] = useState("streets");
   const [pressedButton, setPressedButton] = useState(null);
-  const [importFolderName, setImportFolderName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [visibleFolders, setVisibleFolders] = useState(null);
   const [openFolders, setOpenFolders] = useState([]);
+  const [selectedRouteIdsByFolder, setSelectedRouteIdsByFolder] = useState({});
+  const [bulkMoveTargets, setBulkMoveTargets] = useState({});
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [speedMode, setSpeedMode] = useState(false);
   const [activeMenuPanel, setActiveMenuPanel] = useState(null);
@@ -276,6 +277,57 @@ export default function App() {
     setOpenFolders((current) => current.filter((folder) => availableFolders.includes(folder)));
   }, [availableFolders]);
 
+  useEffect(() => {
+    setSelectedRouteIdsByFolder((current) => {
+      const next = {};
+      let changed = false;
+
+      for (const folder of availableFolders) {
+        const validIds = new Set(
+          importedRoutes
+            .filter((route) => route.folder === folder)
+            .map((route) => route.id)
+        );
+        const selectedIds = Array.isArray(current?.[folder]) ? current[folder].filter((id) => validIds.has(id)) : [];
+        if (selectedIds.length) next[folder] = selectedIds;
+        if (selectedIds.join("|") !== (Array.isArray(current?.[folder]) ? current[folder].join("|") : "")) {
+          changed = true;
+        }
+      }
+
+      if (!changed && Object.keys(next).length === Object.keys(current || {}).length) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [availableFolders, importedRoutes]);
+
+  useEffect(() => {
+    setBulkMoveTargets((current) => {
+      const next = {};
+      let changed = false;
+
+      for (const folder of availableFolders) {
+        const currentTarget = typeof current?.[folder] === "string" ? current[folder] : "";
+        const fallbackTarget = availableFolders.find((candidate) => candidate !== folder) || "";
+        const normalizedTarget =
+          currentTarget && currentTarget !== folder && availableFolders.includes(currentTarget)
+            ? currentTarget
+            : fallbackTarget;
+
+        if (normalizedTarget) next[folder] = normalizedTarget;
+        if (normalizedTarget !== currentTarget) changed = true;
+      }
+
+      if (!changed && Object.keys(next).length === Object.keys(current || {}).length) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [availableFolders]);
+
   const importedRoutesGeoJson = useMemo(
     () => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders),
     [importedRoutes, activeVisibleFolders]
@@ -448,6 +500,72 @@ export default function App() {
     );
   };
 
+  const clearFolderSelection = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setSelectedRouteIdsByFolder((current) => {
+      if (!current?.[normalizedFolder]?.length) return current;
+      const next = { ...current };
+      delete next[normalizedFolder];
+      return next;
+    });
+  };
+
+  const toggleRouteSelection = (folder, routeId) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setSelectedRouteIdsByFolder((current) => {
+      const existingIds = Array.isArray(current?.[normalizedFolder]) ? current[normalizedFolder] : [];
+      const nextIds = existingIds.includes(routeId)
+        ? existingIds.filter((id) => id !== routeId)
+        : [...existingIds, routeId];
+
+      if (!nextIds.length) {
+        const next = { ...current };
+        delete next[normalizedFolder];
+        return next;
+      }
+
+      return {
+        ...current,
+        [normalizedFolder]: nextIds,
+      };
+    });
+  };
+
+  const selectAllRoutesInFolder = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    const routeIds = importedRoutes
+      .filter((route) => route.folder === normalizedFolder)
+      .map((route) => route.id);
+
+    setSelectedRouteIdsByFolder((current) => ({
+      ...current,
+      [normalizedFolder]: routeIds,
+    }));
+  };
+
+  const removeFolderFromLocalLists = (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    setGuestFolders((current) => current.filter((entry) => entry !== normalizedFolder));
+    setCloudFolders((current) => current.filter((entry) => entry !== normalizedFolder));
+    setOpenFolders((current) => current.filter((entry) => entry !== normalizedFolder));
+    setVisibleFolders((current) => {
+      if (current === null) return null;
+      return current.filter((entry) => entry !== normalizedFolder);
+    });
+    setSelectedRouteIdsByFolder((current) => {
+      if (!current?.[normalizedFolder]) return current;
+      const next = { ...current };
+      delete next[normalizedFolder];
+      return next;
+    });
+    setBulkMoveTargets((current) => {
+      if (!current?.[normalizedFolder]) return current;
+      const next = { ...current };
+      delete next[normalizedFolder];
+      return next;
+    });
+  };
+
   const handleCreateFolder = async () => {
     const folder = normalizeFolderName(newFolderName, "");
     if (!folder) {
@@ -461,6 +579,7 @@ export default function App() {
 
     if (availableFolders.includes(folder)) {
       addFolderToVisibleList(folder);
+      openFolder(folder);
       setNewFolderName("");
       setLibraryMessage(`Folder "${folder}" already exists.`);
       return;
@@ -489,13 +608,14 @@ export default function App() {
 
     setGuestFolders((current) => appendFolderName(current, folder));
     addFolderToVisibleList(folder);
+    openFolder(folder);
     setNewFolderName("");
     setLibraryMessage(`Created folder "${folder}".`);
   };
 
   const handleGpxUpload = async (event) => {
     const files = Array.from(event.target.files || []);
-    const folder = normalizeFolderName(importFolderName);
+    const folder = "Imported";
     if (!files.length) {
       event.target.value = "";
       return;
@@ -595,10 +715,15 @@ export default function App() {
     setGuestImportedRoutes((current) => current.map((route) => (route.id === routeId ? { ...route, color } : route)));
   };
 
-  const moveImportedRouteToFolder = async (routeId, nextFolder) => {
+  const moveImportedRoutesToFolder = async (routeIds, nextFolder) => {
+    const normalizedRouteIds = Array.isArray(routeIds) ? Array.from(new Set(routeIds.filter(Boolean))) : [];
     const folder = normalizeFolderName(nextFolder);
-    const route = importedRoutes.find((entry) => entry.id === routeId);
-    if (!route || route.folder === folder) return;
+    const selectedRoutes = importedRoutes.filter((entry) => normalizedRouteIds.includes(entry.id));
+    if (!selectedRoutes.length) return;
+
+    const routesToMove = selectedRoutes.filter((route) => route.folder !== folder);
+    if (!routesToMove.length) return;
+    const movingIds = new Set(routesToMove.map((route) => route.id));
 
     setLibraryError(null);
     setLibraryMessage(null);
@@ -606,20 +731,84 @@ export default function App() {
     openFolder(folder);
 
     if (isCloudLibraryActive && supabaseUser) {
-      setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder } : entry)));
+      const previousRoutes = cloudImportedRoutes;
+      setCloudImportedRoutes((current) => current.map((entry) => (movingIds.has(entry.id) ? { ...entry, folder } : entry)));
       setCloudFolders((current) => appendFolderName(current, folder));
       try {
         await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
-        await updateCloudImportedRouteFolder(routeId, folder);
+        await updateCloudImportedRoutesFolder(
+          routesToMove.map((route) => route.id),
+          folder
+        );
+        setLibraryMessage(
+          routesToMove.length === 1
+            ? `Moved "${routesToMove[0].name}" to "${folder}".`
+            : `Moved ${routesToMove.length} routes to "${folder}".`
+        );
       } catch (error) {
-        setCloudImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder: route.folder } : entry)));
+        setCloudImportedRoutes(previousRoutes);
         setLibraryError(`Failed to move route: ${error?.message || "Unknown error"}`);
+        return false;
       }
+    } else {
+      setGuestFolders((current) => appendFolderName(current, folder));
+      setGuestImportedRoutes((current) => current.map((entry) => (movingIds.has(entry.id) ? { ...entry, folder } : entry)));
+      setLibraryMessage(
+        routesToMove.length === 1
+          ? `Moved "${routesToMove[0].name}" to "${folder}".`
+          : `Moved ${routesToMove.length} routes to "${folder}".`
+      );
+    }
+
+    setSelectedRouteIdsByFolder((current) => {
+      const next = { ...current };
+      for (const route of routesToMove) {
+        const routeFolder = normalizeFolderName(route.folder);
+        if (next[routeFolder]) {
+          next[routeFolder] = next[routeFolder].filter((id) => id !== route.id);
+          if (!next[routeFolder].length) delete next[routeFolder];
+        }
+      }
+      return next;
+    });
+    return true;
+  };
+
+  const removeFolder = async (folder) => {
+    const normalizedFolder = normalizeFolderName(folder);
+    if (normalizedFolder === "Imported") {
+      setLibraryMessage(null);
+      setLibraryError("The Imported folder cannot be removed.");
       return;
     }
 
-    setGuestFolders((current) => appendFolderName(current, folder));
-    setGuestImportedRoutes((current) => current.map((entry) => (entry.id === routeId ? { ...entry, folder } : entry)));
+    const folderRoutes = importedRoutes.filter((route) => route.folder === normalizedFolder);
+    setLibraryError(null);
+    setLibraryMessage(null);
+
+    if (folderRoutes.length) {
+      const didMove = await moveImportedRoutesToFolder(
+        folderRoutes.map((route) => route.id),
+        "Imported"
+      );
+      if (!didMove) return;
+    }
+
+    if (isCloudLibraryActive && supabaseUser) {
+      try {
+        await deleteCloudFolder({ userId: supabaseUser.id, name: normalizedFolder, allowMissingTable: true });
+      } catch (error) {
+        setLibraryError(`Failed to remove folder: ${error?.message || "Unknown error"}`);
+        return;
+      }
+    }
+
+    removeFolderFromLocalLists(normalizedFolder);
+    setLibraryMessage(
+      folderRoutes.length
+        ? `Moved ${folderRoutes.length} routes to "Imported" and removed "${normalizedFolder}".`
+        : `Removed folder "${normalizedFolder}".`
+    );
   };
 
   const refreshCloudRoutes = async () => {
@@ -1235,9 +1424,6 @@ export default function App() {
                     >
                       Email me a sign-in link
                     </button>
-                    <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.45 }}>
-                      Uploads stay in this browser until you sign in. After sign-in, new GPX files sync to your account.
-                    </div>
                   </>
                 )}
 
@@ -1270,22 +1456,13 @@ export default function App() {
                     Create
                   </button>
                 </div>
-                <input
-                  value={importFolderName}
-                  onChange={(e) => setImportFolderName(e.target.value)}
-                  placeholder="Folder name, e.g. 2024"
-                  style={{ ...inputStyle, width: "100%", padding: isMobile ? 12 : 11, boxSizing: "border-box" }}
-                />
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: -2 }}>
-                  Leave empty to save into <strong>Imported</strong>.
-                </div>
                 <button
                   style={getButtonStyle("upload")}
                   onClick={() => gpxFileInputRef.current?.click()}
                   disabled={isCloudRoutesLoading}
                   {...getPressHandlers("upload")}
                 >
-                  {isCloudLibraryActive ? "Upload GPX files to cloud" : "Upload GPX files"}
+                  {isCloudLibraryActive ? "Upload GPX files to Imported" : "Upload GPX files to Imported"}
                 </button>
               </div>
               {libraryMessage && (
@@ -1316,9 +1493,14 @@ export default function App() {
                       const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
                       const checked = activeVisibleFolders.includes(folder);
                       const isOpen = openFolders.includes(folder);
+                      const selectedRouteIds = Array.isArray(selectedRouteIdsByFolder?.[folder]) ? selectedRouteIdsByFolder[folder] : [];
+                      const selectedCount = selectedRouteIds.length;
+                      const allSelected = folderRoutes.length > 0 && selectedCount === folderRoutes.length;
+                      const moveTargets = availableFolders.filter((candidate) => candidate !== folder);
+                      const bulkMoveTarget = moveTargets.includes(bulkMoveTargets?.[folder]) ? bulkMoveTargets[folder] : (moveTargets[0] || "");
                       return (
                         <div key={folder} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "#f5f7fa", border: "1px solid #e7ebf0", fontSize: 13, color: "#000" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", gap: 8 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", alignItems: "center", gap: 8 }}>
                             <input
                               type="checkbox"
                               checked={checked}
@@ -1331,7 +1513,6 @@ export default function App() {
                               style={{
                                 display: "flex",
                                 alignItems: "center",
-                                gap: 8,
                                 minWidth: 0,
                                 background: "transparent",
                                 border: "none",
@@ -1342,57 +1523,119 @@ export default function App() {
                                 textAlign: "left",
                               }}
                             >
-                              <span
-                                aria-hidden="true"
-                                style={{
-                                  display: "inline-block",
-                                  fontSize: 12,
-                                  color: "#64748b",
-                                  transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
-                                  transition: "transform 0.16s ease",
-                                }}
-                              >
-                                ▸
-                              </span>
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {folder}
                               </span>
                             </button>
                             <span style={{ opacity: 0.65 }}>{folderRoutes.length}</span>
+                            {folder !== "Imported" && (
+                              <button
+                                type="button"
+                                onClick={() => removeFolder(folder)}
+                                disabled={isCloudRoutesLoading}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  color: "#991b1b",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                  fontSize: 12,
+                                }}
+                                title={
+                                  folderRoutes.length
+                                    ? `Move all files to Imported and remove ${folder}`
+                                    : `Remove ${folder}`
+                                }
+                              >
+                                Remove
+                              </button>
+                            )}
                           </div>
                           {isOpen && (
                             <div style={{ display: "grid", gap: 6, paddingLeft: 22 }}>
                               {folderRoutes.length === 0 ? (
                                 <div style={{ fontSize: 12, color: "#64748b" }}>No routes in this folder yet.</div>
-                              ) : folderRoutes.map((route) => (
-                                <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "start", fontSize: 12 }}>
-                                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                      <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
-                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                              ) : (
+                                <>
+                                  <div style={{ display: "grid", gap: 6, paddingBottom: 2 }}>
+                                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                                      <button
+                                        style={getButtonStyle(`folder_select_all_${folder}`)}
+                                        onClick={() => selectAllRoutesInFolder(folder)}
+                                        disabled={allSelected}
+                                        {...getPressHandlers(`folder_select_all_${folder}`)}
+                                      >
+                                        Select all
+                                      </button>
+                                      <button
+                                        style={getButtonStyle(`folder_clear_${folder}`)}
+                                        onClick={() => clearFolderSelection(folder)}
+                                        disabled={!selectedCount}
+                                        {...getPressHandlers(`folder_clear_${folder}`)}
+                                      >
+                                        Clear
+                                      </button>
+                                      <span style={{ fontSize: 12, color: "#64748b" }}>
+                                        {selectedCount
+                                          ? `${selectedCount} selected`
+                                          : "Select routes to move them together"}
+                                      </span>
                                     </div>
-                                    <select
-                                      value={route.folder}
-                                      onChange={(e) => moveImportedRouteToFolder(route.id, e.target.value)}
-                                      style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
-                                      title={`Move ${route.name} to another folder`}
-                                    >
-                                      {availableFolders.map((folderOption) => (
-                                        <option key={folderOption} value={folderOption}>
-                                          {folderOption}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8 }}>
+                                      <select
+                                        value={bulkMoveTarget}
+                                        onChange={(event) =>
+                                          setBulkMoveTargets((current) => ({
+                                            ...current,
+                                            [folder]: event.target.value,
+                                          }))
+                                        }
+                                        style={{ ...inputStyle, padding: "6px 8px", fontSize: 12, width: "100%" }}
+                                        disabled={!moveTargets.length}
+                                        title={`Choose where to move selected routes from ${folder}`}
+                                      >
+                                        {moveTargets.length === 0 ? (
+                                          <option value="">No other folders available</option>
+                                        ) : moveTargets.map((folderOption) => (
+                                          <option key={folderOption} value={folderOption}>
+                                            {folderOption}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        style={getButtonStyle(`folder_move_${folder}`)}
+                                        onClick={() => moveImportedRoutesToFolder(selectedRouteIds, bulkMoveTarget)}
+                                        disabled={!selectedCount || !bulkMoveTarget}
+                                        {...getPressHandlers(`folder_move_${folder}`)}
+                                      >
+                                        Move selected
+                                      </button>
+                                    </div>
                                   </div>
-                                  <input
-                                    type="color"
-                                    value={route.color || GPX_ROUTE_COLORS[0]}
-                                    onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
-                                    style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
-                                    title={`Change color for ${route.name}`}
-                                  />
-                                </div>
-                              ))}
+                                  {folderRoutes.map((route) => (
+                                    <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedRouteIds.includes(route.id)}
+                                          onChange={() => toggleRouteSelection(folder, route.id)}
+                                        />
+                                        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                          <span style={{ width: 10, height: 10, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0 }} />
+                                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={route.name}>{route.name}</span>
+                                        </span>
+                                      </label>
+                                      <input
+                                        type="color"
+                                        value={route.color || GPX_ROUTE_COLORS[0]}
+                                        onChange={(e) => updateImportedRouteColor(route.id, e.target.value)}
+                                        style={{ width: 28, height: 28, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                                        title={`Change color for ${route.name}`}
+                                      />
+                                    </div>
+                                  ))}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
