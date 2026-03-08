@@ -62,6 +62,7 @@ export default function App() {
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [pendingPin, setPendingPin] = useState(null);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
@@ -232,6 +233,8 @@ export default function App() {
     locateUser,
     routeToDestination,
     loadRouteOnMap,
+    addWaypoint,
+    getCurrentLocation,
   } = useMap({
     appleMapContainerRef,
     mapContainerRef,
@@ -240,13 +243,33 @@ export default function App() {
     routingMode,
     isMobile,
     speedMode,
+    onFirstClick: (lngLat) => setPendingPin(lngLat),
   });
 
-  useEffect(() => {
-    if (waypointsRef.current.length > 0 && activeMenuPanel !== "route") {
-      setActiveMenuPanel("route");
+  const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
+
+  const handleLocationNo = () => {
+    if (!pendingPin) return;
+    addWaypoint(pendingPin.lng, pendingPin.lat);
+    setPendingPin(null);
+  };
+
+  const handleLocationYes = async () => {
+    if (!pendingPin) return;
+    try {
+      const userLocation = await getCurrentLocation();
+      if (userLocation) {
+        addWaypoint(userLocation[0], userLocation[1]);
+        addWaypoint(pendingPin.lng, pendingPin.lat);
+      }
+    } catch (error) {
+      console.error("Could not get user location", error);
+      // Fallback to just adding the clicked pin
+      addWaypoint(pendingPin.lng, pendingPin.lat);
+    } finally {
+      setPendingPin(null);
     }
-  }, [waypointsRef.current.length, activeMenuPanel]);
+  };
 
   // ---------- Route management ----------
 
@@ -482,7 +505,7 @@ export default function App() {
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
-      {activeMenuPanel === "route" && (
+      {showRoutingUi && (
         <div
           style={{
             position: "absolute",
@@ -664,7 +687,7 @@ export default function App() {
         </div>
       )}
 
-      {activeMenuPanel === "route" && waypointsRef.current.length > 0 && (
+      {showRoutingUi && waypointsRef.current.length > 0 && (
         <div
           style={{
             position: "absolute",
@@ -1177,6 +1200,30 @@ export default function App() {
         </div>
       </div>
 
+
+      {pendingPin && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(255,255,255,0.95)',
+          padding: '20px 24px',
+          borderRadius: 16,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          zIndex: 10,
+          textAlign: 'center',
+          border: '1px solid rgba(15, 23, 42, 0.1)',
+        }}>
+          <p style={{ marginTop: 0, marginBottom: 16, fontSize: 16, color: '#0f172a' }}>Start route from current location?</p>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={handleLocationYes} style={getButtonStyle('loc_yes', true)}>Yes</button>
+            <button onClick={handleLocationNo} style={getButtonStyle('loc_no')}>No</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
