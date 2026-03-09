@@ -52,8 +52,8 @@ export default function App() {
   const [searchError, setSearchError] = useState(null);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [pendingPin, setPendingPin] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
+  const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -91,7 +91,7 @@ export default function App() {
   useEffect(() => {
     if (skipNextSearchRef.current) { skipNextSearchRef.current = false; return; }
     const query = searchQuery.trim();
-    if (!query || query.length < 2) { setSearchResults([]); setSearchError(null); setIsSearchLoading(false); return; }
+    if (!query || query.length < 3) { setSearchResults([]); setSearchError(null); setIsSearchLoading(false); return; }
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
@@ -214,8 +214,8 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
-  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
-    appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode,
+  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, getCurrentLocation } = useMap({
+    appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
     onFirstClick: (lngLat) => setPendingPin(lngLat),
   });
 
@@ -255,7 +255,6 @@ export default function App() {
     setActiveRouteId(r.id); setRouteName(r.name);
     setRoutingMode(r.routingMode || (r.gravelMode ? "gravel" : "regular"));
     loadRouteOnMap(r);
-    if (isMobile) setIsMobileMenuOpen(false);
   };
 
   const deleteRoute = (id) => {
@@ -478,7 +477,6 @@ export default function App() {
     setSearchQuery(label); setIsSearchDropdownOpen(false); setSearchError(null);
     const result = await routeToDestination(feature.center);
     if (!result?.ok) setSearchError(result?.message || "Could not route to that place.");
-    if (isMobile) setIsMobileMenuOpen(false);
   };
 
   const handleSearchKeyDown = async (event) => {
@@ -489,11 +487,7 @@ export default function App() {
   };
 
   const toggleMenuPanel = (panelKey) => {
-    setActiveMenuPanel((cur) => {
-      const next = cur === panelKey ? null : panelKey;
-      if (isMobile && next) setIsMobileMenuOpen(false);
-      return next;
-    });
+    setActiveMenuPanel((cur) => cur === panelKey ? null : panelKey);
   };
 
   const getPressHandlers = (buttonId) => ({
@@ -505,7 +499,7 @@ export default function App() {
   });
 
   // --- Styles ---
-  const { getButtonStyle, inputStyle, getMenuIconButtonStyle, expandedMenuCardStyle, libraryPanelFloatingStyle, librarySectionStyle, getLibraryBadgeStyle, getLibraryButtonStyle, libraryInputStyle } = createStyleHelpers({ isMobile, pressedButton, activeMenuPanel });
+  const { getButtonStyle, inputStyle, getMenuIconButtonStyle, expandedMenuFloatingStyle, libraryPanelFloatingStyle, librarySectionStyle, getLibraryBadgeStyle, getLibraryButtonStyle, libraryInputStyle } = createStyleHelpers({ isMobile, pressedButton, activeMenuPanel });
 
   const libraryProps = {
     isMobile,
@@ -532,13 +526,6 @@ export default function App() {
         <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
       </div>
 
-      {isMobile && (
-        <button onClick={() => setIsMobileMenuOpen((v) => !v)} aria-label="Open menu" style={{ position: "absolute", top: 10, left: 10, zIndex: 5, width: 44, height: 44, borderRadius: 999, border: "1px solid rgba(15, 23, 42, 0.08)", display: "grid", placeItems: "center", background: "rgba(255,255,255,0.92)", boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)", cursor: "pointer" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6H20M4 12H20M4 18H20" stroke="#24364b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-      )}
-      {isMobile && isMobileMenuOpen && <div onClick={() => setIsMobileMenuOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.2)", zIndex: 4 }} />}
-
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
       {showRoutingUi && (
@@ -551,6 +538,7 @@ export default function App() {
           newRoute={newRoute}
           routingMode={routingMode} setRoutingMode={setRoutingMode}
           getPressHandlers={getPressHandlers} getButtonStyle={getButtonStyle} inputStyle={inputStyle}
+          pressedButton={pressedButton}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
         />
@@ -566,7 +554,7 @@ export default function App() {
       )}
 
       <QuickMenu
-        quickMenuRef={quickMenuRef} isMobile={isMobile} isMobileMenuOpen={isMobileMenuOpen}
+        quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -576,7 +564,7 @@ export default function App() {
         getSearchResultLabels={getSearchResultLabels} searchBoxRef={searchBoxRef}
         libraryProps={libraryProps}
         getMenuIconButtonStyle={getMenuIconButtonStyle}
-        expandedMenuCardStyle={expandedMenuCardStyle}
+        expandedMenuFloatingStyle={expandedMenuFloatingStyle}
         libraryPanelFloatingStyle={libraryPanelFloatingStyle}
         inputStyle={inputStyle}
       />
@@ -597,6 +585,43 @@ export default function App() {
         handleLocationYes={handleLocationYes} handleLocationNo={handleLocationNo}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
       />
+
+      {mapStyle === "outdoor" && (
+        <div
+          onClick={() => setShowCyclingOverlay((v) => !v)}
+          role="button"
+          aria-pressed={showCyclingOverlay}
+          style={{
+            position: "absolute", bottom: 10, right: 10, zIndex: 2,
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(15, 23, 42, 0.08)",
+            borderRadius: 999,
+            padding: "10px 16px",
+            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+            display: "flex", alignItems: "center", gap: 10,
+            cursor: "pointer",
+            userSelect: "none", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#24364b" }}>Cycling routes</span>
+          <div style={{
+            width: 42, height: 26, borderRadius: 999,
+            background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
+            position: "relative",
+            transition: "background 0.2s ease",
+            flexShrink: 0,
+          }}>
+            <div style={{
+              position: "absolute",
+              top: 3, left: showCyclingOverlay ? 19 : 3,
+              width: 20, height: 20, borderRadius: "50%",
+              background: "#fff",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+              transition: "left 0.2s ease",
+            }} />
+          </div>
+        </div>
+      )}
     </>
   );
 }

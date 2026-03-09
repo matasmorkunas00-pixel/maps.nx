@@ -351,6 +351,19 @@ function removeLayerAndSource(map, layerId, sourceId) {
   if (sourceId && map.getSource(sourceId)) map.removeSource(sourceId);
 }
 
+function applyCyclingOverlay(map, mapStyle, show) {
+  const overlaySource = MAP_STYLES[mapStyle]?.cyclingOverlaySource;
+  if (!overlaySource) return;
+  try {
+    if (!map.getSource("cycling-overlay")) {
+      map.addSource("cycling-overlay", overlaySource);
+      map.addLayer({ id: "cycling-overlay", type: "raster", source: "cycling-overlay", layout: { visibility: show ? "visible" : "none" } });
+    } else {
+      map.setLayoutProperty("cycling-overlay", "visibility", show ? "visible" : "none");
+    }
+  } catch {}
+}
+
 function getBaseStyle(mapStyle, useAppleSatellite) {
   if (mapStyle === "satellite" && useAppleSatellite) return TRANSPARENT_STYLE;
   return MAP_STYLES[mapStyle]?.style || MAP_STYLES.streets.style;
@@ -413,7 +426,7 @@ function calculateElevationProfile(geojson) {
 
 // ---------- Hook ----------
 
-export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, onFirstClick }) {
+export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay, onFirstClick }) {
   const mapRef = useRef(null);
   const appleMapRef = useRef(null);
   const appleMapKitRef = useRef(null);
@@ -434,6 +447,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const importedGeoJsonRef = useRef(importedRoutesGeoJson);
   const isMobileRef = useRef(isMobile);
   const speedModeRef = useRef(speedMode);
+  const showCyclingOverlayRef = useRef(showCyclingOverlay);
 
   const [distanceKm, setDistanceKm] = useState("0.00");
   const [elevationGainM, setElevationGainM] = useState("0");
@@ -448,6 +462,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   useEffect(() => { importedGeoJsonRef.current = importedRoutesGeoJson; }, [importedRoutesGeoJson]);
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
   useEffect(() => { speedModeRef.current = speedMode; }, [speedMode]);
+  useEffect(() => { showCyclingOverlayRef.current = showCyclingOverlay; }, [showCyclingOverlay]);
 
   // Stable internal functions stored in a ref so they can call each other
   const fns = useRef(null);
@@ -835,6 +850,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       if (elevationHoverCoordRef.current) addRouteHoverLayers(map, elevationHoverCoordRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
+      applyCyclingOverlay(map, mapStyle, showCyclingOverlayRef.current);
     });
   }, [appleMapContainerRef, mapStyle, appleMapReady]);
 
@@ -848,6 +864,13 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       removeLayerAndSource(map, "imported-routes", "imported-routes");
     }
   }, [importedRoutesGeoJson]);
+
+  // ---------- Cycling overlay toggle ----------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    applyCyclingOverlay(map, mapStyle, showCyclingOverlay);
+  }, [showCyclingOverlay, mapStyle]);
 
   // ---------- Routing mode change ----------
   useEffect(() => {

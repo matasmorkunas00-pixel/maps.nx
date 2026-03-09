@@ -1,8 +1,8 @@
-import { MAP_STYLES, MAPTILER_API_KEY } from "../constants";
+import { MAP_STYLES, THUNDERFOREST_API_KEY } from "../constants";
 
 const STREETS_PREVIEW_URL = "/streets-preview.jpg";
 const SATELLITE_PREVIEW_URL = "/satelite-preview.jpg";
-const OUTDOOR_PREVIEW_URL = `https://api.maptiler.com/maps/outdoor-v2/static/25.2797,54.6872,13/160x160.png?key=${MAPTILER_API_KEY}`;
+const OUTDOOR_PREVIEW_URL = `https://tile.thunderforest.com/cycle/13/4671/2600.png?apikey=${THUNDERFOREST_API_KEY}`;
 
 export function MapStylePicker({
   mapStyle, setMapStyle,
@@ -49,7 +49,7 @@ export function MapStylePicker({
 
   return (
     <div ref={styleControlsRef} style={{
-      position: "absolute", left: 10, bottom: bottomPos, zIndex: 2,
+      position: "absolute", left: 10, bottom: bottomPos, zIndex: 5,
       display: "grid", gap: 8,
       transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
