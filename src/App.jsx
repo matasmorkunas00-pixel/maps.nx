@@ -56,6 +56,8 @@ export default function App() {
   const [pendingPin, setPendingPin] = useState(null);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
   const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
+  const [panelAnimatingOut, setPanelAnimatingOut] = useState(null);
+  const panelAnimOutTimer = useRef(null);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -218,11 +220,11 @@ export default function App() {
 
   const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
-    onFirstClick: (lngLat) => setPendingPin(lngLat),
+    onFirstClick: (lngLat) => { setPendingPin(lngLat); setActiveMenuPanel(null); setIsStyleMenuOpen(false); },
   });
 
   const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
-  const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : 68;
+  const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : "68px";
 
   const handleElevationHoverCoordinateChange = useCallback((coordinates) => {
     if (Array.isArray(coordinates) && coordinates.length >= 2) {
@@ -472,12 +474,18 @@ export default function App() {
     return { primary, secondary };
   };
 
+  const closeMobilePanel = useCallback((panelKey) => {
+    setPanelAnimatingOut(panelKey);
+    clearTimeout(panelAnimOutTimer.current);
+    panelAnimOutTimer.current = setTimeout(() => setPanelAnimatingOut(null), 280);
+  }, []);
+
   const handleSearchSelect = async (feature) => {
     if (!Array.isArray(feature?.center) || feature.center.length < 2) return;
     const label = feature?.place_name || feature?.text || "";
     skipNextSearchRef.current = true;
     setSearchQuery(label); setIsSearchDropdownOpen(false); setSearchError(null);
-    if (isMobile) setActiveMenuPanel(null);
+    if (isMobile) { closeMobilePanel("search"); setActiveMenuPanel(null); }
     const result = await routeToDestination(feature.center);
     if (!result?.ok) setSearchError(result?.message || "Could not route to that place.");
   };
@@ -490,7 +498,17 @@ export default function App() {
   };
 
   const toggleMenuPanel = (panelKey) => {
-    setActiveMenuPanel((cur) => cur === panelKey ? null : panelKey);
+    const opening = activeMenuPanel !== panelKey;
+    if (isMobile) {
+      if (!opening) {
+        closeMobilePanel(panelKey);
+      } else if (activeMenuPanel) {
+        closeMobilePanel(activeMenuPanel);
+      }
+    }
+    setActiveMenuPanel(opening ? panelKey : null);
+    setIsStyleMenuOpen(false);
+    if (isMobile && opening && panelKey === "library") setIsGraphExpanded(false);
   };
 
   const getPressHandlers = (buttonId) => ({
@@ -531,7 +549,7 @@ export default function App() {
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
-      {showRoutingUi && !(isMobile && activeMenuPanel === "search") && (
+      {showRoutingUi && !(isMobile && (activeMenuPanel === "search" || activeMenuPanel === "library")) && (
         <RouteToolbar
           undoLast={undoLast} clearAll={clearAll}
           distanceKm={distanceKm} elevationGainM={elevationGainM}
@@ -547,7 +565,7 @@ export default function App() {
         />
       )}
 
-      {showRoutingUi && waypointsRef.current.length > 0 && (
+      {showRoutingUi && waypointsRef.current.length > 0 && !(isMobile && activeMenuPanel === "library") && (
         <ElevationSheet
           routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} distanceKm={distanceKm}
           isMobile={isMobile} bottomSheetHeight={bottomSheetHeight}
@@ -559,6 +577,7 @@ export default function App() {
       <QuickMenu
         quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
+        isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
@@ -572,11 +591,17 @@ export default function App() {
         inputStyle={inputStyle}
       />
 
-      {isMobile && activeMenuPanel === "library" && (
+      {isMobile && (activeMenuPanel === "library" || panelAnimatingOut === "library") && (
         <>
           <div
-            onClick={() => toggleMenuPanel("library")}
-            style={{ position: "fixed", inset: 0, zIndex: 9, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }}
+            onClick={() => activeMenuPanel === "library" && toggleMenuPanel("library")}
+            style={{
+              position: "fixed", inset: 0, zIndex: 9,
+              background: "rgba(15, 23, 42, 0.4)",
+              backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+              animation: `${panelAnimatingOut === "library" ? "overlay-fade-out" : "overlay-fade-in"} 0.26s ease both`,
+              pointerEvents: panelAnimatingOut === "library" ? "none" : "auto",
+            }}
           />
           <div style={{
             position: "fixed",
@@ -589,6 +614,8 @@ export default function App() {
             padding: "12px 14px 24px",
             background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,252,0.96) 100%)",
             boxShadow: "0 -8px 32px rgba(15, 23, 42, 0.18), 0 -2px 8px rgba(15, 23, 42, 0.08)",
+            animation: `${panelAnimatingOut === "library" ? "slide-down-out" : "slide-up-in"} 0.28s cubic-bezier(0.32, 0.72, 0, 1) both`,
+            pointerEvents: panelAnimatingOut === "library" ? "none" : "auto",
           }}>
             <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(15,23,42,0.18)", margin: "0 auto 14px" }} />
             <LibraryPanel {...libraryProps} />
@@ -596,12 +623,11 @@ export default function App() {
         </>
       )}
 
-      {isMobile && activeMenuPanel === "search" && (
+      {isMobile && (activeMenuPanel === "search" || panelAnimatingOut === "search") && (
         <div style={{
           position: "fixed",
           top: "calc(env(safe-area-inset-top, 0px) + 10px)",
           left: "50%",
-          transform: "translateX(-50%)",
           zIndex: 10,
           width: "calc(100vw - 40px)",
           maxWidth: 480,
@@ -612,6 +638,8 @@ export default function App() {
           borderRadius: 16,
           boxShadow: "0 4px 24px rgba(15,23,42,0.12)",
           padding: "10px 12px",
+          animation: `${panelAnimatingOut === "search" ? "fade-drop-out" : "fade-drop-in"} 0.22s ease both`,
+          pointerEvents: panelAnimatingOut === "search" ? "none" : "auto",
         }}>
           <SearchPanel
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -634,6 +662,7 @@ export default function App() {
         isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
         styleControlsRef={styleControlsRef}
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length} bottomSheetHeight={bottomSheetHeight}
+        onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
       />
 
       <PendingPinDialog

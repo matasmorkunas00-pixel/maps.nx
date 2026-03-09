@@ -6,6 +6,7 @@ export function QuickMenu({
   quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
+  isGraphExpanded, bottomSheetHeight,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -16,18 +17,23 @@ export function QuickMenu({
   getMenuIconButtonStyle, expandedMenuFloatingStyle, libraryPanelFloatingStyle,
   inputStyle,
 }) {
+  const topPos = isMobile && isGraphExpanded
+    ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
+    : "50%";
+
   return (
     <div
       ref={quickMenuRef}
       style={{
         position: "absolute",
-        top: "50%",
+        top: topPos,
         left: "calc(14px + env(safe-area-inset-left, 0px))",
         transform: "translateY(-50%)",
         zIndex: 5,
         display: "grid",
         gap: 10,
         alignItems: "start",
+        transition: "top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Search */}
