@@ -466,6 +466,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
   // Stable internal functions stored in a ref so they can call each other
   const fns = useRef(null);
+  const routingDebounceRef = useRef(null);
+  const routingAbortRef = useRef(null);
 
   // ---------- Map init ----------
   useEffect(() => {
@@ -649,8 +651,19 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         clearRouteLayer();
       }
 
-      async function calculateRoute() {
+      function calculateRoute() {
         if (waypointsRef.current.length < 2) return;
+        clearTimeout(routingDebounceRef.current);
+        routingDebounceRef.current = setTimeout(() => fns.current._doCalculateRoute(), 400);
+      }
+
+      async function _doCalculateRoute() {
+        if (waypointsRef.current.length < 2) return;
+
+        // Cancel any in-flight request
+        if (routingAbortRef.current) routingAbortRef.current.abort();
+        const controller = new AbortController();
+        routingAbortRef.current = controller;
 
         const mode = ROUTING_MODES[routingModeRef.current] || ROUTING_MODES.gravel;
         let routeWaypoints = waypointsRef.current;
@@ -670,6 +683,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         setIsRouting(true);
         setRoutingError(null);
 
+        const timeout = setTimeout(() => controller.abort(), 15000);
         try {
           const res = await fetch(
             `https://api.openrouteservice.org/v2/directions/${mode.profile}/geojson`,
@@ -677,9 +691,18 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
               method: "POST",
               headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
               body: JSON.stringify({ coordinates: routeWaypoints, elevation: true }),
+              signal: controller.signal,
             }
           );
+          clearTimeout(timeout);
           const data = await res.json();
+
+          if (!res.ok) {
+            const msg = data?.error?.message || data?.message || `API error ${res.status}`;
+            console.error("ORS API error:", data);
+            setRoutingError(`Routing failed: ${msg}`);
+            return;
+          }
 
           if (!data.features?.length) {
             setRoutingError("No route found. Try moving your waypoints.");
@@ -699,10 +722,20 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
           addRouteLayers(map, data);
         } catch (err) {
+          clearTimeout(timeout);
+          if (err.name === "AbortError") {
+            // Cancelled by a newer request — only show error if this controller is still current
+            if (routingAbortRef.current === controller) {
+              setRoutingError("Routing timed out. Check your connection.");
+            }
+            return;
+          }
           console.error("Routing error:", err);
           setRoutingError("Routing failed. Check your connection and try again.");
         } finally {
-          setIsRouting(false);
+          if (routingAbortRef.current === controller) {
+            setIsRouting(false);
+          }
         }
       }
 
@@ -723,7 +756,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         fns.current.calculateRoute();
       };
 
-      fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint };
+      fns.current = { calculateRoute, _doCalculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint };
 
     // --- Map events ---
     map.on("load", () => {
