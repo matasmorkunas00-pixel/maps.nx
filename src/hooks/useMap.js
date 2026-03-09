@@ -683,7 +683,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         if (e.originalEvent.target.closest(".maplibregl-marker")) return;
 
         // Handle clicks on existing route line to insert a new waypoint
-        const hits = map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] });
         const hits = map.getLayer("route-hit-area")
           ? map.queryRenderedFeatures(e.point, { layers: ["route-hit-area"] })
           : [];
