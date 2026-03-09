@@ -605,13 +605,13 @@ export default function App() {
           />
           <div style={{
             position: "fixed",
-            bottom: "env(safe-area-inset-bottom, 0px)",
+            bottom: 0,
             left: 0, right: 0,
             maxHeight: "min(85dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 48px))",
             overflowY: "auto",
             zIndex: 10,
             borderRadius: "20px 20px 0 0",
-            padding: "12px 14px 24px",
+            padding: "12px 14px calc(24px + env(safe-area-inset-bottom, 0px))",
             background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,252,0.96) 100%)",
             boxShadow: "0 -8px 32px rgba(15, 23, 42, 0.18), 0 -2px 8px rgba(15, 23, 42, 0.08)",
             animation: `${panelAnimatingOut === "library" ? "slide-down-out" : "slide-up-in"} 0.28s cubic-bezier(0.32, 0.72, 0, 1) both`,
