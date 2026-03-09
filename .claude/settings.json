@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/tmp/full_trace.py:*)",
+      "Bash(python3 /tmp/full_trace.py)",
+      "Bash(python3:*)",
+      "Bash(/tmp/detailed_trace.py:*)",
+      "Bash(/tmp/imbalance_check.py:*)",
+      "Bash(/tmp/cumulative.py:*)",
+      "Bash(npm install)",
+      "Bash(git fetch origin)",
+      "Bash(git restore src/App.jsx src/hooks/useMap.js)",
+      "Bash(git merge origin/main)",
+      "Bash(npx vite build --mode development)"
+    ]
+  }
+}
