@@ -83,7 +83,7 @@ export function MapStylePicker({
           </button>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 8 }}>
         <button
           onClick={() => { setIsMapModesFlashOn(true); const opening = !isStyleMenuOpen; setIsStyleMenuOpen(opening); if (opening) onStyleMenuOpen?.(); }}
           onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()}
