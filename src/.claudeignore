@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+
+# Assets Claude doesn't need to read
+public/
+src/assets/
+
+# Git history
+.git/
+
+# Map data files (large, Claude doesn't need raw geodata)
+src/data/*.geojson
+src/data/*.json
