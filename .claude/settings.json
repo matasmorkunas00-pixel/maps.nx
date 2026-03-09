@@ -14,7 +14,9 @@
       "Bash(npx vite build --mode development)",
       "Bash(git fetch origin main)",
       "Bash(git checkout main)",
-      "Bash(git pull origin main)"
+      "Bash(git pull origin main)",
+      "Bash(git rebase main)",
+      "Bash(git push --force-with-lease origin kriso)"
     ],
     "additionalDirectories": [
       "/Users/kristupas/.claude/projects/-Users-kristupas-maps-maps-nx"

@@ -8,15 +8,16 @@ const GLASS = {
   boxShadow: "0 4px 24px rgba(15,23,42,0.12)",
 };
 
-const ELEM_BG = "rgba(255,255,255,0.45)";
+const ELEM_BG = "rgba(255,255,255,0.82)";
+const ELEM_BLUR = { backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" };
 const ELEM_BORDER = "1px solid rgba(15,23,42,0.1)";
 
-const iconBtn = (pressed) => ({
-  width: 36,
-  height: 36,
+const iconBtn = (pressed, stretch = false) => ({
+  ...(stretch ? { alignSelf: "stretch", height: "auto", aspectRatio: "1" } : { width: 36, height: 36 }),
   borderRadius: 10,
   border: ELEM_BORDER,
-  background: pressed ? "rgba(220,228,238,0.7)" : ELEM_BG,
+  background: pressed ? "rgba(210,220,232,0.88)" : ELEM_BG,
+  ...ELEM_BLUR,
   display: "grid",
   placeItems: "center",
   cursor: "pointer",
@@ -33,6 +34,7 @@ const inputBase = {
   borderRadius: 10,
   border: ELEM_BORDER,
   background: ELEM_BG,
+  ...ELEM_BLUR,
   fontSize: 13,
   color: "#0f172a",
   outline: "none",
@@ -50,83 +52,23 @@ export function RouteToolbar({
 }) {
   if (isMobile) {
     return (
-      <div style={{
-        position: "absolute",
-        top: 10,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 6,
-        width: "calc(100vw - 20px)",
-        maxWidth: 480,
-        animation: "route-stats-fade-in 0.22s ease both",
-      }}>
+      <>
+        {/* Top toolbar — no shared background, individual elements only */}
         <div style={{
-          ...GLASS,
-          borderRadius: 16,
-          padding: "10px 12px",
+          position: "absolute",
+          top: 10,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 6,
+          width: "calc(100vw - 20px)",
+          maxWidth: 480,
           display: "flex",
           flexDirection: "column",
           gap: 8,
+          animation: "route-stats-fade-in 0.22s ease both",
         }}>
-          {/* Row 1: actions + stats */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Left: undo + clear */}
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={undoLast} aria-label="Undo" style={iconBtn(pressedButton === "undo_icon")} {...getPressHandlers("undo_icon")}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M9 8H4V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M4 8C5.9 5.9 8.6 4.5 11.7 4.5C17.4 4.5 22 9.1 22 14.8C22 16.2 21.7 17.5 21.2 18.7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
-                </svg>
-              </button>
-              <button onClick={clearAll} aria-label="Clear route" style={iconBtn(pressedButton === "clear_icon")} {...getPressHandlers("clear_icon")}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 7H19" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
-                  <path d="M9 7V5.8C9 5.36 9.36 5 9.8 5H14.2C14.64 5 15 5.36 15 5.8V7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
-                  <path d="M8 7L8.6 18.2C8.63 18.66 9.02 19 9.48 19H14.52C14.98 19 15.37 18.66 15.4 18.2L16 7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Center: stats */}
-            <div style={{ flex: 1, display: "flex", gap: 6 }}>
-              {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(({ label, value, unit }) => (
-                <div key={label} style={{
-                  flex: 1,
-                  background: ELEM_BG,
-                  border: ELEM_BORDER,
-                  borderRadius: 10,
-                  padding: "5px 6px",
-                  textAlign: "center",
-                }}>
-                  <div style={{ fontSize: 8.5, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
-                    {value}<span style={{ marginLeft: 2, fontSize: 11, fontWeight: 500, color: "#64748b" }}>{unit}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Right: save + export */}
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={saveRoute} disabled={isRouting} aria-label="Save route" style={iconBtn(pressedButton === "save_icon")} {...getPressHandlers("save_icon")}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <button onClick={exportGPX} aria-label="Export GPX" style={iconBtn(pressedButton === "export_icon")} {...getPressHandlers("export_icon")}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <polyline points="7 10 12 15 17 10" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <line x1="12" y1="15" x2="12" y2="3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Row 2: name + mode + new */}
-          <div style={{ display: "flex", gap: 6 }}>
+          {/* Row 1: route name + new */}
+          <div style={{ display: "flex", gap: 8 }}>
             <input
               value={routeName} onChange={(e) => setRouteName(e.target.value)}
               placeholder="Route name"
@@ -134,51 +76,95 @@ export function RouteToolbar({
                 flex: 1, minWidth: 0,
                 height: 36, padding: "0 10px", boxSizing: "border-box",
                 borderRadius: 10, border: ELEM_BORDER,
-                background: ELEM_BG,
-                fontSize: 14, color: "#0f172a",
-                outline: "none",
+                background: ELEM_BG, ...ELEM_BLUR,
+                fontSize: 14, color: "#0f172a", outline: "none",
               }}
             />
-            <select
-              value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
-              style={{
-                height: 36, padding: "0 6px", boxSizing: "border-box",
-                borderRadius: 10, border: ELEM_BORDER,
-                background: ELEM_BG,
-                fontSize: 13, color: "#0f172a",
-                flexShrink: 0, maxWidth: 110,
-                outline: "none",
-              }}
-            >
-              {Object.entries(ROUTING_MODES).map(([value, opt]) => (
-                <option key={value} value={value}>{opt.label}</option>
-              ))}
-            </select>
             <button
               onClick={newRoute}
               style={{
-                height: 36, padding: "0 12px", borderRadius: 10,
+                height: 36, padding: "0 16px", borderRadius: 10,
                 border: ELEM_BORDER,
-                background: ELEM_BG,
+                background: pressedButton === "new" ? "rgba(210,220,232,0.88)" : ELEM_BG,
+                ...ELEM_BLUR,
                 fontSize: 13, fontWeight: 600, color: "#0f172a",
                 cursor: "pointer", flexShrink: 0,
-                WebkitTapHighlightColor: "transparent",
-                outline: "none",
+                WebkitTapHighlightColor: "transparent", outline: "none",
               }}
               {...getPressHandlers("new")}
             >New</button>
           </div>
+
+          {/* Row 2: icon buttons */}
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { key: "undo_icon", onClick: undoLast, label: "Undo", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 8H4V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 8C5.9 5.9 8.6 4.5 11.7 4.5C17.4 4.5 22 9.1 22 14.8C22 16.2 21.7 17.5 21.2 18.7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /></svg> },
+              { key: "clear_icon", onClick: clearAll, label: "Clear route", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 7H19" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /><path d="M9 7V5.8C9 5.36 9.36 5 9.8 5H14.2C14.64 5 15 5.36 15 5.8V7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /><path d="M8 7L8.6 18.2C8.63 18.66 9.02 19 9.48 19H14.52C14.98 19 15.37 18.66 15.4 18.2L16 7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /></svg> },
+              { key: "save_icon", onClick: saveRoute, label: "Save route", disabled: isRouting, svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+              { key: "export_icon", onClick: exportGPX, label: "Export GPX", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><polyline points="7 10 12 15 17 10" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><line x1="12" y1="15" x2="12" y2="3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+            ].map(({ key, onClick, label, disabled, svg }) => (
+              <button key={key} onClick={onClick} disabled={disabled} aria-label={label}
+                style={{ ...iconBtn(pressedButton === key), flex: 1, width: "auto", height: 40 }}
+                {...getPressHandlers(key)}>
+                {svg}
+              </button>
+            ))}
+          </div>
+
+          {/* Row 3: stats */}
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(({ label, value, unit }) => (
+              <div key={label} style={{
+                flex: 1,
+                height: 58,
+                background: ELEM_BG,
+                ...ELEM_BLUR,
+                border: ELEM_BORDER,
+                borderRadius: 12,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                textAlign: "center",
+              }}>
+                <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+                <div style={{ marginTop: 2, fontSize: 22, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                  {value}<span style={{ marginLeft: 3, fontSize: 13, fontWeight: 500, color: "#64748b" }}>{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {routingError && (
+            <div style={{ padding: "8px 12px", borderRadius: 10, background: ELEM_BG, ...ELEM_BLUR, color: "#991b1b", fontSize: 12, border: "1px solid rgba(254,202,202,0.7)" }}>
+              {routingError}
+            </div>
+          )}
+          {isRouting && (
+            <div style={{ fontSize: 12, color: "#334155", textAlign: "center", padding: "2px 0" }}>Calculating route…</div>
+          )}
         </div>
 
-        {routingError && (
-          <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 10, ...GLASS, color: "#991b1b", fontSize: 12, border: "1px solid rgba(254,202,202,0.7)" }}>
-            {routingError}
-          </div>
-        )}
-        {isRouting && (
-          <div style={{ marginTop: 4, fontSize: 12, color: "#334155", textAlign: "center", padding: "4px 0" }}>Calculating route…</div>
-        )}
-      </div>
+        {/* Routing mode — bottom right, aligned with map style picker */}
+        <select
+          value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
+          style={{
+            position: "fixed",
+            bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+            right: "calc(10px + env(safe-area-inset-right, 0px))",
+            zIndex: 6,
+            height: 36, padding: "0 8px", boxSizing: "border-box",
+            borderRadius: 10, border: ELEM_BORDER,
+            background: ELEM_BG, ...ELEM_BLUR,
+            fontSize: 13, color: "#0f172a",
+            outline: "none",
+            animation: "route-stats-fade-in 0.22s ease both",
+          }}
+        >
+          {Object.entries(ROUTING_MODES).map(([value, opt]) => (
+            <option key={value} value={value}>{opt.label}</option>
+          ))}
+        </select>
+      </>
     );
   }
 
@@ -195,16 +181,13 @@ export function RouteToolbar({
       animation: "route-stats-fade-in 0.22s ease both",
     }}>
       <div style={{
-        ...GLASS,
-        borderRadius: 18,
-        padding: "10px 14px",
         display: "flex",
-        alignItems: "center",
-        gap: 10,
+        alignItems: "stretch",
+        gap: 8,
         pointerEvents: "auto",
       }}>
         {/* Left: undo + trash stacked vertically */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button onClick={undoLast} title="Undo" aria-label="Undo last route point"
             style={iconBtn(pressedButton === "undo_icon")}
             {...getPressHandlers("undo_icon")}>
@@ -225,15 +208,19 @@ export function RouteToolbar({
         </div>
 
         {/* Stats: Distance + Elevation */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignSelf: "stretch" }}>
           {[{ label: "Distance", value: distanceKm, unit: "km" }, { label: "Elevation", value: elevationGainM, unit: "m" }].map(({ label, value, unit }) => (
             <div key={label} style={{
               padding: "8px 14px",
               borderRadius: 12,
               background: ELEM_BG,
+              ...ELEM_BLUR,
               border: ELEM_BORDER,
               minWidth: 110,
               textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
             }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 600 }}>{label}</div>
               <div style={{ marginTop: 3, fontSize: 20, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
@@ -244,7 +231,7 @@ export function RouteToolbar({
         </div>
 
         {/* Right: save + export stacked vertically */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button onClick={saveRoute} disabled={isRouting} title="Save route"
             style={iconBtn(pressedButton === "save_icon")}
             {...getPressHandlers("save_icon")}>
@@ -265,12 +252,9 @@ export function RouteToolbar({
           </button>
         </div>
 
-        {/* Divider */}
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(15,23,42,0.1)", margin: "0 2px" }} />
-
         {/* Route controls: name+new row, then routing select */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 8 }}>
             <input
               value={routeName} onChange={(e) => setRouteName(e.target.value)}
               placeholder="Route name"
