@@ -13,6 +13,7 @@ export function MapStylePicker({
   isLocationFlashOn, setIsLocationFlashOn,
   styleControlsRef,
   showRoutingUi, waypointsCount, bottomSheetHeight,
+  onStyleMenuOpen,
 }) {
   const previewStyle = (style) => ({
     width: "100%",
@@ -45,11 +46,13 @@ export function MapStylePicker({
     WebkitTapHighlightColor: "transparent",
   });
 
-  const bottomPos = isMobile && showRoutingUi && waypointsCount > 0 ? bottomSheetHeight + 10 : 10;
+  const bottomPos = isMobile && showRoutingUi && waypointsCount > 0
+    ? `calc(${bottomSheetHeight} + 10px)`
+    : "10px";
 
   return (
     <div ref={styleControlsRef} style={{
-      position: "absolute", left: `calc(10px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos}px + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
+      position: "absolute", left: `calc(10px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos} + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
       display: "grid", gap: 8,
       transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
@@ -62,7 +65,7 @@ export function MapStylePicker({
           border: "1px solid rgba(15, 23, 42, 0.08)",
           boxShadow: "0 12px 30px rgba(15, 23, 42, 0.18)",
           backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-          transition: "transform 0.16s ease, opacity 0.16s ease",
+          animation: "panel-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both",
         }}>
           <button onClick={() => setMapStyle("streets")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.streets.label}>
             <div style={previewStyle("streets")}><img src={STREETS_PREVIEW_URL} alt="Streets map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" /></div>
@@ -82,7 +85,7 @@ export function MapStylePicker({
       )}
       <div style={{ display: "flex", gap: 8 }}>
         <button
-          onClick={() => { setIsMapModesFlashOn(true); setIsStyleMenuOpen((open) => !open); }}
+          onClick={() => { setIsMapModesFlashOn(true); const opening = !isStyleMenuOpen; setIsStyleMenuOpen(opening); if (opening) onStyleMenuOpen?.(); }}
           onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()}
           aria-label="Map style options"
           style={circleBtn(isMapModesFlashOn)}

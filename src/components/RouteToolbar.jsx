@@ -25,6 +25,8 @@ const iconBtn = (pressed, stretch = false) => ({
   flexShrink: 0,
   WebkitTapHighlightColor: "transparent",
   outline: "none",
+  transition: "background-color 0.15s ease, transform 0.15s ease",
+  transform: pressed ? "scale(0.9)" : "scale(1)",
 });
 
 const inputBase = {
@@ -67,7 +69,7 @@ export function RouteToolbar({
           gap: 8,
           animation: "route-stats-fade-in 0.22s ease both",
         }}>
-          {/* Row 1: route name + new */}
+          {/* Row 1: route name + new + routing mode */}
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={routeName} onChange={(e) => setRouteName(e.target.value)}
@@ -93,6 +95,20 @@ export function RouteToolbar({
               }}
               {...getPressHandlers("new")}
             >New</button>
+            <select
+              value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
+              style={{
+                height: 36, padding: "0 8px", boxSizing: "border-box",
+                borderRadius: 10, border: ELEM_BORDER,
+                background: ELEM_BG, ...ELEM_BLUR,
+                fontSize: 13, color: "#0f172a",
+                outline: "none", flexShrink: 0,
+              }}
+            >
+              {Object.entries(ROUTING_MODES).map(([value, opt]) => (
+                <option key={value} value={value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Row 2: icon buttons */}
@@ -144,26 +160,6 @@ export function RouteToolbar({
           )}
         </div>
 
-        {/* Routing mode — bottom right, aligned with map style picker */}
-        <select
-          value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
-          style={{
-            position: "fixed",
-            bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-            right: "calc(10px + env(safe-area-inset-right, 0px))",
-            zIndex: 6,
-            height: 36, padding: "0 8px", boxSizing: "border-box",
-            borderRadius: 10, border: ELEM_BORDER,
-            background: ELEM_BG, ...ELEM_BLUR,
-            fontSize: 13, color: "#0f172a",
-            outline: "none",
-            animation: "route-stats-fade-in 0.22s ease both",
-          }}
-        >
-          {Object.entries(ROUTING_MODES).map(([value, opt]) => (
-            <option key={value} value={value}>{opt.label}</option>
-          ))}
-        </select>
       </>
     );
   }
