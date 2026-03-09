@@ -15,6 +15,8 @@ import { ElevationSheet } from "./components/ElevationSheet";
 import { MapStylePicker } from "./components/MapStylePicker";
 import { PendingPinDialog } from "./components/PendingPinDialog";
 import { QuickMenu } from "./components/QuickMenu";
+import { SearchPanel } from "./components/SearchPanel";
+import { LibraryPanel } from "./components/LibraryPanel";
 
 export default function App() {
   const appleMapContainerRef = useRef(null);
@@ -475,6 +477,7 @@ export default function App() {
     const label = feature?.place_name || feature?.text || "";
     skipNextSearchRef.current = true;
     setSearchQuery(label); setIsSearchDropdownOpen(false); setSearchError(null);
+    if (isMobile) setActiveMenuPanel(null);
     const result = await routeToDestination(feature.center);
     if (!result?.ok) setSearchError(result?.message || "Could not route to that place.");
   };
@@ -528,7 +531,7 @@ export default function App() {
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
-      {showRoutingUi && (
+      {showRoutingUi && !(isMobile && activeMenuPanel === "search") && (
         <RouteToolbar
           undoLast={undoLast} clearAll={clearAll}
           distanceKm={distanceKm} elevationGainM={elevationGainM}
@@ -569,6 +572,59 @@ export default function App() {
         inputStyle={inputStyle}
       />
 
+      {isMobile && activeMenuPanel === "library" && (
+        <>
+          <div
+            onClick={() => toggleMenuPanel("library")}
+            style={{ position: "fixed", inset: 0, zIndex: 9, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }}
+          />
+          <div style={{
+            position: "fixed",
+            bottom: "env(safe-area-inset-bottom, 0px)",
+            left: 0, right: 0,
+            maxHeight: "min(85dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 48px))",
+            overflowY: "auto",
+            zIndex: 10,
+            borderRadius: "20px 20px 0 0",
+            padding: "12px 14px 24px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,252,0.96) 100%)",
+            boxShadow: "0 -8px 32px rgba(15, 23, 42, 0.18), 0 -2px 8px rgba(15, 23, 42, 0.08)",
+          }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(15,23,42,0.18)", margin: "0 auto 14px" }} />
+            <LibraryPanel {...libraryProps} />
+          </div>
+        </>
+      )}
+
+      {isMobile && activeMenuPanel === "search" && (
+        <div style={{
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
+          width: "calc(100vw - 40px)",
+          maxWidth: 480,
+          background: "rgba(255,255,255,0.7)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          border: "1px solid rgba(255,255,255,0.55)",
+          borderRadius: 16,
+          boxShadow: "0 4px 24px rgba(15,23,42,0.12)",
+          padding: "10px 12px",
+        }}>
+          <SearchPanel
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
+            isSearchDropdownOpen={isSearchDropdownOpen} setIsSearchDropdownOpen={setIsSearchDropdownOpen}
+            handleSearchSelect={handleSearchSelect} handleSearchKeyDown={handleSearchKeyDown}
+            getSearchResultLabels={getSearchResultLabels} searchBoxRef={searchBoxRef}
+            inputStyle={{ ...inputStyle, background: "rgba(255,255,255,0.65)", border: "1px solid rgba(15,23,42,0.1)", borderRadius: 10 }}
+            autoFocus
+          />
+        </div>
+      )}
+
       <MapStylePicker
         mapStyle={mapStyle} setMapStyle={setMapStyle}
         locateUser={locateUser} locationState={locationState}
@@ -592,7 +648,7 @@ export default function App() {
           role="button"
           aria-pressed={showCyclingOverlay}
           style={{
-            position: "absolute", bottom: 10, right: 10, zIndex: 2,
+            position: "absolute", bottom: "calc(10px + env(safe-area-inset-bottom, 0px))", right: "calc(10px + env(safe-area-inset-right, 0px))", zIndex: 2,
             background: "rgba(255,255,255,0.92)",
             border: "1px solid rgba(15, 23, 42, 0.08)",
             borderRadius: 999,
