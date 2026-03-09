@@ -54,6 +54,7 @@ export default function App() {
   const [pendingPin, setPendingPin] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
+  const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -215,7 +216,7 @@ export default function App() {
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
   const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, getCurrentLocation } = useMap({
-    appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode,
+    appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
     onFirstClick: (lngLat) => setPendingPin(lngLat),
   });
 
@@ -588,6 +589,43 @@ export default function App() {
         handleLocationYes={handleLocationYes} handleLocationNo={handleLocationNo}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
       />
+
+      {mapStyle === "outdoor" && (
+        <div
+          onClick={() => setShowCyclingOverlay((v) => !v)}
+          role="button"
+          aria-pressed={showCyclingOverlay}
+          style={{
+            position: "absolute", bottom: 10, right: 10, zIndex: 2,
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(15, 23, 42, 0.08)",
+            borderRadius: 999,
+            padding: "10px 16px",
+            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
+            display: "flex", alignItems: "center", gap: 10,
+            cursor: "pointer",
+            userSelect: "none", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#24364b" }}>Cycling routes</span>
+          <div style={{
+            width: 42, height: 26, borderRadius: 999,
+            background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
+            position: "relative",
+            transition: "background 0.2s ease",
+            flexShrink: 0,
+          }}>
+            <div style={{
+              position: "absolute",
+              top: 3, left: showCyclingOverlay ? 19 : 3,
+              width: 20, height: 20, borderRadius: "50%",
+              background: "#fff",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+              transition: "left 0.2s ease",
+            }} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
