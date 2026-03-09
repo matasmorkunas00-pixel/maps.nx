@@ -12,7 +12,7 @@ export function SearchPanel({
       <input
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        onFocus={() => { if (searchResults.length || searchQuery.trim().length >= 2) setIsSearchDropdownOpen(true); }}
+        onFocus={() => { if (searchResults.length || searchQuery.trim().length >= 3) setIsSearchDropdownOpen(true); }}
         onKeyDown={handleSearchKeyDown}
         placeholder="Search address, shops, tourist places..."
         style={{ ...inputStyle, width: "100%", padding: "11px 40px 11px 12px", boxSizing: "border-box" }}
@@ -23,7 +23,7 @@ export function SearchPanel({
           <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
       </div>
-      {isSearchDropdownOpen && (isSearchLoading || searchResults.length > 0 || searchQuery.trim().length >= 2) && (
+      {isSearchDropdownOpen && (isSearchLoading || searchResults.length > 0 || searchQuery.trim().length >= 3) && (
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, zIndex: 6,
           borderRadius: 12, border: "1px solid rgba(15, 23, 42, 0.12)",

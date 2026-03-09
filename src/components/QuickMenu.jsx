@@ -3,7 +3,7 @@ import { SearchPanel } from "./SearchPanel";
 import { LibraryPanel } from "./LibraryPanel";
 
 export function QuickMenu({
-  quickMenuRef, isMobile, isMobileMenuOpen,
+  quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
   // search
@@ -13,7 +13,7 @@ export function QuickMenu({
   // library
   libraryProps,
   // styles
-  getMenuIconButtonStyle, expandedMenuCardStyle, libraryPanelFloatingStyle,
+  getMenuIconButtonStyle, expandedMenuFloatingStyle, libraryPanelFloatingStyle,
   inputStyle,
 }) {
   return (
@@ -21,26 +21,13 @@ export function QuickMenu({
       ref={quickMenuRef}
       style={{
         position: "absolute",
-        top: isMobile ? 0 : "50%",
-        left: isMobile ? 0 : 10,
-        transform: isMobile
-          ? isMobileMenuOpen ? "translateX(0)" : "translateX(-100%)"
-          : "translateY(-50%)",
+        top: "50%",
+        left: 10,
+        transform: "translateY(-50%)",
         zIndex: 5,
         display: "grid",
         gap: 10,
         alignItems: "start",
-        transition: "transform 0.25s ease",
-        ...(isMobile && {
-          padding: "70px 10px 10px",
-          height: "100%",
-          background: "rgba(255,255,255,0.9)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-          borderRight: "1px solid rgba(15, 23, 42, 0.1)",
-          boxShadow: "5px 0 20px rgba(0,0,0,0.1)",
-          width: "min(calc(100vw - 60px), 320px)",
-        }),
       }}
     >
       {/* Search */}
@@ -53,8 +40,8 @@ export function QuickMenu({
         </button>
         {activeMenuPanel === "search" && (
           <div style={{
-            ...expandedMenuCardStyle,
-            ...(isMobile && { position: "absolute", top: MENU_ICON_SIZE + 10, left: 0, width: "100%" }),
+            ...expandedMenuFloatingStyle,
+            width: isMobile ? "calc(100vw - 74px)" : 300,
           }}>
             <SearchPanel
               searchQuery={searchQuery} setSearchQuery={setSearchQuery}
