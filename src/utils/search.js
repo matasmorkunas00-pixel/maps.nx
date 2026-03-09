@@ -1,6 +1,6 @@
 import { MAPTILER_API_KEY } from "../constants";
 
-const SEARCH_RESULT_LIMIT = 8;
+const SEARCH_RESULT_LIMIT = 4;
 
 export function normalizeMapTilerFeatures(payload) {
   const features = Array.isArray(payload?.features) ? payload.features : [];

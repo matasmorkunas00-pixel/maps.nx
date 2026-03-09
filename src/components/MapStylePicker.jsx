@@ -49,7 +49,7 @@ export function MapStylePicker({
 
   return (
     <div ref={styleControlsRef} style={{
-      position: "absolute", left: 10, bottom: bottomPos, zIndex: 2,
+      position: "absolute", left: 10, bottom: bottomPos, zIndex: 5,
       display: "grid", gap: 8,
       transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>

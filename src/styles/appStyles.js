@@ -69,17 +69,8 @@ export function createStyleHelpers({ isMobile, pressedButton, activeMenuPanel })
 
   const libraryPanelFloatingStyle = {
     ...expandedMenuFloatingStyle,
-    ...(isMobile
-      ? {
-          top: MENU_ICON_SIZE + 10,
-          left: 0,
-          transform: "none",
-          width: "100%",
-          maxHeight: "min(68vh, calc(100vh - 140px))",
-        }
-      : {}),
-    width: isMobile ? "100%" : 340,
-    maxHeight: isMobile ? "min(68vh, calc(100vh - 140px))" : "70vh",
+    width: isMobile ? "calc(100vw - 74px)" : 340,
+    maxHeight: isMobile ? "min(72vh, calc(100vh - 100px))" : "70vh",
     padding: 14,
     borderRadius: 18,
     background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,249,252,0.92) 100%)",
