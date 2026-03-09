@@ -162,13 +162,13 @@ export function ElevationChart({ routeGeoJson, elevationGainM, elevationLossM, o
   };
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", padding: "12px 16px", boxSizing: "border-box", minHeight: 0 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, fontSize: 13, color: "#0f172a", paddingBottom: 8 }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", padding: "10px 16px 14px", boxSizing: "border-box", minHeight: 0 }}>
+      <div style={{ position: "absolute", top: 10, right: 16, display: "flex", justifyContent: "flex-end", gap: 16, fontSize: 13, color: "#0f172a", pointerEvents: "none" }}>
         <span>↑ {elevationGainM} m</span>
         <span>↓ {elevationLossM} m</span>
       </div>
 
-      <div style={{ flex: "1 1 auto", width: "100%", minHeight: 120 }}>
+      <div style={{ width: "100%", height: "100%", minHeight: 140 }}>
         <svg
           width="100%"
           height="100%"

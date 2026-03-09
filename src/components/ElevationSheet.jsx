@@ -13,7 +13,7 @@ export function ElevationSheet({
         bottom: isMobile ? 0 : 20,
         left: isMobile ? 0 : 120,
         right: isMobile ? 0 : 20,
-        height: isMobile ? bottomSheetHeight : "calc(100vh / 6)",
+        height: isMobile ? bottomSheetHeight : "clamp(220px, 24vh, 280px)",
         background: "rgba(255, 255, 255, 0.85)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
