@@ -1,6 +1,31 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { getFilteredElevations } from "../utils/geo";
 
+function getNiceStep(rawStep) {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalized = rawStep / magnitude;
+
+  if (normalized <= 1) return magnitude;
+  if (normalized <= 2) return 2 * magnitude;
+  if (normalized <= 5) return 5 * magnitude;
+  return 10 * magnitude;
+}
+
+function buildTicks(min, max, targetCount) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [min];
+  const step = getNiceStep((max - min) / Math.max(1, targetCount));
+  const start = Math.ceil(min / step) * step;
+  const ticks = [];
+
+  if (start > min) ticks.push(min);
+  for (let value = start; value < max; value += step) {
+    ticks.push(Number(value.toFixed(6)));
+  }
+  if (!ticks.length || ticks[ticks.length - 1] !== max) ticks.push(max);
+  return ticks;
+}
+
 function findNearestPointIndex(points, targetDistance) {
   if (!points.length) return null;
 
@@ -78,18 +103,29 @@ export function ElevationChart({ routeGeoJson, elevationGainM, elevationLossM, o
   if (!data) return null;
 
   const width = 1000;
-  const height = 220;
-  const pad = { top: 12, right: 12, bottom: 28, left: 44 };
+  const height = 240;
+  const pad = { top: 18, right: 18, bottom: 38, left: 60 };
 
   const plotWidth = Math.max(1, width - pad.left - pad.right);
   const plotHeight = Math.max(1, height - pad.top - pad.bottom);
-  const rangeE = data.maxE - data.minE;
+  const rawRangeE = Math.max(1, data.maxE - data.minE);
+  const minVisualRangeE = 40;
+  const paddedRangeE = Math.max(minVisualRangeE, rawRangeE * 1.35);
+  const elevationMidpoint = (data.maxE + data.minE) / 2;
+  const rawDomainMin = elevationMidpoint - paddedRangeE / 2;
+  const rawDomainMax = elevationMidpoint + paddedRangeE / 2;
+  const yStep = getNiceStep((rawDomainMax - rawDomainMin) / 4);
+  const domainMinE = Math.floor(rawDomainMin / yStep) * yStep;
+  const domainMaxE = Math.ceil(rawDomainMax / yStep) * yStep;
+  const rangeE = Math.max(1, domainMaxE - domainMinE);
   const rangeX = Math.max(1, data.totalDist);
   const baselineY = height - pad.bottom;
+  const yTicks = buildTicks(domainMinE, domainMaxE, 4);
+  const xTicks = buildTicks(0, data.totalDist, 4);
 
   const getPoint = (p) => ({
     x: pad.left + (p.x / rangeX) * plotWidth,
-    y: pad.top + (1 - (rangeE > 0 ? (p.y - data.minE) / rangeE : 0.5)) * plotHeight,
+    y: pad.top + (1 - (rangeE > 0 ? (p.y - domainMinE) / rangeE : 0.5)) * plotHeight,
   });
 
   const chartPoints = data.points.map(getPoint);
@@ -149,22 +185,32 @@ export function ElevationChart({ routeGeoJson, elevationGainM, elevationLossM, o
             </linearGradient>
           </defs>
 
-          <line x1={pad.left} y1={baselineY} x2={width - pad.right} y2={baselineY} stroke="#cbd5e1" strokeWidth="1" />
+          {yTicks.map((tick) => {
+            const y = pad.top + (1 - (tick - domainMinE) / rangeE) * plotHeight;
+            return (
+              <g key={`y-${tick}`}>
+                <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="#dbe4ef" strokeWidth="1" />
+                <text x={pad.left - 10} y={y} dy="0.35em" fontSize="17" fill="#475569" textAnchor="end">
+                  {Math.round(tick)} m
+                </text>
+              </g>
+            );
+          })}
+
+          {xTicks.map((tick) => {
+            const x = pad.left + (tick / rangeX) * plotWidth;
+            return (
+              <g key={`x-${tick}`}>
+                <line x1={x} y1={pad.top} x2={x} y2={baselineY} stroke="#edf2f7" strokeWidth="1" />
+                <text x={x} y={height - 10} fontSize="17" fill="#475569" textAnchor={tick === 0 ? "start" : tick === data.totalDist ? "end" : "middle"}>
+                  {(tick / 1000).toFixed(tick >= 10000 ? 0 : 1)} km
+                </text>
+              </g>
+            );
+          })}
+
           <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
           <path d={linePath} fill="none" stroke="#0f172a" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-
-          <text x="4" y={pad.top + 4} fontSize="22" fill="#334155">
-            {Math.round(data.maxE)} m
-          </text>
-          <text x="4" y={baselineY} dy="0.35em" fontSize="22" fill="#334155">
-            {Math.round(data.minE)} m
-          </text>
-          <text x={pad.left} y={height - 6} fontSize="22" fill="#334155">
-            0 km
-          </text>
-          <text x={width - pad.right} y={height - 6} fontSize="22" fill="#334155" textAnchor="end">
-            {(data.totalDist / 1000).toFixed(1)} km
-          </text>
 
           {hoveredChartPoint && hoveredDataPoint && (
             <g pointerEvents="none">
