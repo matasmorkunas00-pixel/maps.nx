@@ -1,4 +1,4 @@
-export function PendingPinDialog({ pendingPin, handleLocationYes, handleLocationNo, isMobile, getButtonStyle }) {
+export function PendingPinDialog({ pendingPin, handleLocationYes, handleLocationNo, handleLocationCancel, isMobile, getButtonStyle }) {
   if (!pendingPin) return null;
   return (
     <div style={{
@@ -16,6 +16,17 @@ export function PendingPinDialog({ pendingPin, handleLocationYes, handleLocation
         <button onClick={handleLocationYes} style={getButtonStyle("loc_yes", true)}>Yes</button>
         <button onClick={handleLocationNo} style={getButtonStyle("loc_no")}>No</button>
       </div>
+      <span
+        onClick={handleLocationCancel}
+        style={{
+          display: "inline-block", marginTop: 14,
+          fontSize: 13, color: "#94a3b8",
+          textDecoration: "underline", textUnderlineOffset: 2,
+          cursor: "pointer", userSelect: "none",
+        }}
+      >
+        cancel
+      </span>
     </div>
   );
 }

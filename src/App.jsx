@@ -237,6 +237,7 @@ export default function App() {
   // --- Handlers ---
 
   const handleLocationNo = () => { if (!pendingPin) return; addWaypoint(pendingPin.lng, pendingPin.lat); setPendingPin(null); };
+  const handleLocationCancel = () => setPendingPin(null);
   const handleLocationYes = async () => {
     if (!pendingPin) return;
     try {
@@ -668,6 +669,7 @@ export default function App() {
       <PendingPinDialog
         pendingPin={pendingPin}
         handleLocationYes={handleLocationYes} handleLocationNo={handleLocationNo}
+        handleLocationCancel={handleLocationCancel}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
       />
 
