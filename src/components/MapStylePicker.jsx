@@ -47,8 +47,8 @@ export function MapStylePicker({
   });
 
   const bottomPos = isMobile && showRoutingUi && waypointsCount > 0
-    ? `calc(${bottomSheetHeight} + 10px)`
-    : "10px";
+    ? `calc(${bottomSheetHeight} + 4px)`
+    : "4px";
 
   return (
     <div ref={styleControlsRef} style={{
