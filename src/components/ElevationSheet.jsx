@@ -3,6 +3,7 @@ import { ElevationChart } from "./ElevationChart";
 export function ElevationSheet({
   routeGeoJson, elevationGainM, elevationLossM, distanceKm,
   isMobile, bottomSheetHeight, isGraphExpanded, setIsGraphExpanded,
+  onHoverCoordinateChange,
 }) {
   return (
     <div
@@ -39,8 +40,8 @@ export function ElevationSheet({
           <span>↓ {elevationLossM} m</span>
         </div>
       )}
-      <div style={{ width: "100%", height: "100%", opacity: !isMobile || isGraphExpanded ? 1 : 0, transition: "opacity 0.2s ease" }}>
-        <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} />
+      <div style={{ width: "100%", height: "100%", opacity: !isMobile || isGraphExpanded ? 1 : 0, transition: "opacity 0.2s ease", pointerEvents: !isMobile || isGraphExpanded ? "auto" : "none" }}>
+        <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} onHoverCoordinateChange={onHoverCoordinateChange} />
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY } from "./constants";
 import { uid } from "./utils/geo";
@@ -214,13 +214,21 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
-  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, getCurrentLocation } = useMap({
+  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode,
     onFirstClick: (lngLat) => setPendingPin(lngLat),
   });
 
   const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
   const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : 68;
+
+  const handleElevationHoverCoordinateChange = useCallback((coordinates) => {
+    if (Array.isArray(coordinates) && coordinates.length >= 2) {
+      setElevationHoverCoordinate(coordinates);
+      return;
+    }
+    clearElevationHoverCoordinate();
+  }, [setElevationHoverCoordinate, clearElevationHoverCoordinate]);
 
   // --- Handlers ---
 
@@ -553,6 +561,7 @@ export default function App() {
           routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} distanceKm={distanceKm}
           isMobile={isMobile} bottomSheetHeight={bottomSheetHeight}
           isGraphExpanded={isGraphExpanded} setIsGraphExpanded={setIsGraphExpanded}
+          onHoverCoordinateChange={handleElevationHoverCoordinateChange}
         />
       )}
 
