@@ -18,7 +18,7 @@ export function LibraryPanel({
   loadRoute, deleteRoute,
   gpxFileInputRef,
   // styles
-  getPressHandlers, pressedButton,
+  getPressHandlers,
   librarySectionStyle, getLibraryBadgeStyle, getLibraryButtonStyle, libraryInputStyle,
 }) {
   return (

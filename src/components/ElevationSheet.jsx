@@ -3,6 +3,7 @@ import { ElevationChart } from "./ElevationChart";
 export function ElevationSheet({
   routeGeoJson, elevationGainM, elevationLossM, distanceKm,
   isMobile, bottomSheetHeight, isGraphExpanded, setIsGraphExpanded,
+  onHoverCoordinateChange,
 }) {
   return (
     <div
@@ -12,7 +13,7 @@ export function ElevationSheet({
         bottom: isMobile ? 0 : 20,
         left: isMobile ? 0 : 120,
         right: isMobile ? 0 : 20,
-        height: isMobile ? bottomSheetHeight : "calc(100vh / 6)",
+        height: isMobile ? bottomSheetHeight : "clamp(220px, 24vh, 280px)",
         background: "rgba(255, 255, 255, 0.85)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -39,8 +40,8 @@ export function ElevationSheet({
           <span>↓ {elevationLossM} m</span>
         </div>
       )}
-      <div style={{ width: "100%", height: "100%", opacity: !isMobile || isGraphExpanded ? 1 : 0, transition: "opacity 0.2s ease" }}>
-        <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} />
+      <div style={{ width: "100%", height: "100%", opacity: !isMobile || isGraphExpanded ? 1 : 0, transition: "opacity 0.2s ease", pointerEvents: !isMobile || isGraphExpanded ? "auto" : "none" }}>
+        <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} onHoverCoordinateChange={onHoverCoordinateChange} />
       </div>
     </div>
   );

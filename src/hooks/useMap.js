@@ -23,6 +23,19 @@ const TRANSPARENT_STYLE = {
 
 const ROUTE_PAINT = { "line-color": "#ff5500", "line-width": 4 };
 const ROUTE_HIT_PAINT = { "line-color": "#000000", "line-width": 18, "line-opacity": 0 };
+const ROUTE_HOVER_HALO_PAINT = {
+  "circle-radius": 9,
+  "circle-color": "#ffffff",
+  "circle-opacity": 0.96,
+  "circle-stroke-color": "rgba(15, 23, 42, 0.14)",
+  "circle-stroke-width": 1.5,
+};
+const ROUTE_HOVER_POINT_PAINT = {
+  "circle-radius": 5.5,
+  "circle-color": "#ff5500",
+  "circle-stroke-color": "#ffffff",
+  "circle-stroke-width": 2,
+};
 const IMPORTED_PAINT = {
   "line-color": ["coalesce", ["get", "color"], GPX_ROUTE_COLORS[0]],
   "line-width": 2.5,
@@ -49,6 +62,31 @@ function addImportedLayer(map, geojson) {
   if (ensureSource(map, "imported-routes", geojson)) {
     map.addLayer({ id: "imported-routes", type: "line", source: "imported-routes", paint: IMPORTED_PAINT });
   }
+}
+
+function buildRouteHoverGeoJson(coordinates) {
+  return {
+    type: "FeatureCollection",
+    features: Array.isArray(coordinates) && coordinates.length >= 2
+      ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates } }]
+      : [],
+  };
+}
+
+function addRouteHoverLayers(map, coordinates) {
+  ensureSource(map, "route-hover-point", buildRouteHoverGeoJson(coordinates));
+  if (!map.getLayer("route-hover-point-halo")) {
+    map.addLayer({ id: "route-hover-point-halo", type: "circle", source: "route-hover-point", paint: ROUTE_HOVER_HALO_PAINT });
+  }
+  if (!map.getLayer("route-hover-point")) {
+    map.addLayer({ id: "route-hover-point", type: "circle", source: "route-hover-point", paint: ROUTE_HOVER_POINT_PAINT });
+  }
+}
+
+function removeRouteHoverLayers(map) {
+  if (!map) return;
+  removeLayerAndSource(map, "route-hover-point-halo", null);
+  removeLayerAndSource(map, "route-hover-point", "route-hover-point");
 }
 
 function applySatelliteGoogleLikeTone(map, mapStyle) {
@@ -401,6 +439,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const userMarkerRef = useRef(null);
   const currentMapStyleRef = useRef(getBaseStyleKey(mapStyle, false));
   const onFirstClickRef = useRef(onFirstClick);
+  const elevationHoverCoordRef = useRef(null);
   useEffect(() => { onFirstClickRef.current = onFirstClick; }, [onFirstClick]);
 
   // Mutable refs so stable callbacks always see the latest values
@@ -600,6 +639,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       }
 
       function clearRouteState() {
+        elevationHoverCoordRef.current = null;
+        removeRouteHoverLayers(map);
         routeDataRef.current = null;
         setRouteGeoJson(null);
         setDistanceKm("0.00");
@@ -645,6 +686,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
             return;
           }
 
+          elevationHoverCoordRef.current = null;
+          removeRouteHoverLayers(map);
           routeDataRef.current = data;
           setRouteGeoJson(data);
 
@@ -804,6 +847,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
+      if (elevationHoverCoordRef.current) addRouteHoverLayers(map, elevationHoverCoordRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
       applyCyclingOverlay(map, mapStyle, showCyclingOverlayRef.current);
@@ -995,6 +1039,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     const map = mapRef.current;
     if (!map) return;
 
+    elevationHoverCoordRef.current = null;
+    removeRouteHoverLayers(map);
     waypointsRef.current = (savedRoute.waypoints || []).map(([lng, lat]) => [lng, lat]);
     routeDataRef.current = savedRoute.routeGeoJson || null;
 
@@ -1040,6 +1086,20 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     fns.current?.addWaypoint(lng, lat);
   }, []);
 
+  const setElevationHoverCoordinate = useCallback((coordinates) => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded() || !Array.isArray(coordinates) || coordinates.length < 2) return;
+    const normalized = [Number(coordinates[0]), Number(coordinates[1])];
+    if (!Number.isFinite(normalized[0]) || !Number.isFinite(normalized[1])) return;
+    elevationHoverCoordRef.current = normalized;
+    addRouteHoverLayers(map, normalized);
+  }, []);
+
+  const clearElevationHoverCoordinate = useCallback(() => {
+    elevationHoverCoordRef.current = null;
+    removeRouteHoverLayers(mapRef.current);
+  }, []);
+
   const getCurrentLocation = useCallback(() => {
     return new Promise((resolve, reject) => {
       if (Array.isArray(userLocationRef.current)) {
@@ -1073,6 +1133,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     loadRouteOnMap,
     getMapViewport,
     addWaypoint,
+    setElevationHoverCoordinate,
+    clearElevationHoverCoordinate,
     getCurrentLocation,
   };
 }
