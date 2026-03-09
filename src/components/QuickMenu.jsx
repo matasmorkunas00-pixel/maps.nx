@@ -22,7 +22,7 @@ export function QuickMenu({
       style={{
         position: "absolute",
         top: "50%",
-        left: 10,
+        left: "calc(14px + env(safe-area-inset-left, 0px))",
         transform: "translateY(-50%)",
         zIndex: 5,
         display: "grid",
@@ -38,10 +38,10 @@ export function QuickMenu({
             <path d="M16.5 16.5L21 21" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
-        {activeMenuPanel === "search" && (
+        {activeMenuPanel === "search" && !isMobile && (
           <div style={{
             ...expandedMenuFloatingStyle,
-            width: isMobile ? "calc(100vw - 74px)" : 300,
+            width: 300,
           }}>
             <SearchPanel
               searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -113,7 +113,7 @@ export function QuickMenu({
             <path d="M3.5 7.5C3.5 6.4 4.4 5.5 5.5 5.5H10L12 7.5H18.5C19.6 7.5 20.5 8.4 20.5 9.5V16.5C20.5 17.6 19.6 18.5 18.5 18.5H5.5C4.4 18.5 3.5 17.6 3.5 16.5V7.5Z" stroke="#24364b" strokeWidth="1.7" />
           </svg>
         </button>
-        {activeMenuPanel === "library" && (
+        {activeMenuPanel === "library" && !isMobile && (
           <div style={{ ...libraryPanelFloatingStyle, overflowY: "auto" }}>
             <LibraryPanel {...libraryProps} />
           </div>
