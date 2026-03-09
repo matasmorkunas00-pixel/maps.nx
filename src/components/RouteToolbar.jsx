@@ -30,7 +30,6 @@ export function RouteToolbar({
   newRoute,
   routingMode, setRoutingMode,
   getPressHandlers, getButtonStyle, inputStyle,
-  waypointsCount, bottomSheetHeight,
   pressedButton,
 }) {
   if (isMobile) {

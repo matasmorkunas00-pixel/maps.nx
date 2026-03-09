@@ -214,7 +214,7 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
-  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, getCurrentLocation } = useMap({
+  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
     onFirstClick: (lngLat) => setPendingPin(lngLat),
   });
