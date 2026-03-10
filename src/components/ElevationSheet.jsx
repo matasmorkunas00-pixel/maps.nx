@@ -68,6 +68,7 @@ export function ElevationSheet({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        animation: isMobile ? "slide-up-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both" : undefined,
       }}
     >
       {/* Header: stats + hide button */}

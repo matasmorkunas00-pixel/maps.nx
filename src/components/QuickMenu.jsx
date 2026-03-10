@@ -6,7 +6,7 @@ export function QuickMenu({
   quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
-  isGraphExpanded, bottomSheetHeight, showRoutingUi, waypointsCount,
+  isGraphExpanded, bottomSheetHeight, showRoutingUi, waypointsCount, elevationHidden,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -22,8 +22,12 @@ export function QuickMenu({
   const stylePickerBottom = isMobile && showRoutingUi && waypointsCount > 0
     ? `calc(${bottomSheetHeight} + 4px + env(safe-area-inset-bottom, 0px))`
     : `calc(4px + env(safe-area-inset-bottom, 0px))`;
+  // When elevation sheet is visible, push menu above it (sheet height + 10px gap matches icon gap)
+  const elevationSheetVisible = isMobile && showRoutingUi && waypointsCount > 0 && !elevationHidden;
   const mobileBottom = isMobile
-    ? `calc(${stylePickerBottom} + 108px)`
+    ? elevationSheetVisible
+      ? `calc(clamp(171px, 19vh, 225px) + 20px + env(safe-area-inset-bottom, 0px) + 108px)`
+      : `calc(${stylePickerBottom} + 108px)`
     : undefined;
   const topPos = !isMobile && isGraphExpanded
     ? `calc((100dvh - ${bottomSheetHeight}) / 2)`

@@ -16,7 +16,6 @@ export function MapStylePicker({
   elevationHidden,
   onStyleMenuOpen,
 }) {
-  const hiddenByElevation = isMobile && !elevationHidden && waypointsCount > 0;
   const previewStyle = (style) => ({
     width: "100%",
     aspectRatio: "1 / 1",
@@ -48,9 +47,12 @@ export function MapStylePicker({
     WebkitTapHighlightColor: "transparent",
   });
 
-  const bottomPos = isMobile && showRoutingUi && waypointsCount > 0
-    ? `calc(${bottomSheetHeight} + 4px)`
-    : "4px";
+  const elevationSheetVisible = isMobile && !elevationHidden && waypointsCount > 0;
+  const bottomPos = elevationSheetVisible
+    ? `calc(clamp(171px, 19vh, 225px) + 20px)`
+    : isMobile && showRoutingUi && waypointsCount > 0
+      ? `calc(${bottomSheetHeight} + 4px)`
+      : "4px";
 
   const popupStyle = {
     position: "absolute",
@@ -71,9 +73,7 @@ export function MapStylePicker({
   return (
     <div ref={styleControlsRef} style={{
       position: "absolute", left: `calc(14px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos} + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
-      transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease",
-      opacity: hiddenByElevation ? 0 : 1,
-      pointerEvents: hiddenByElevation ? "none" : "auto",
+      transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 8 }}>
         <div style={{ position: "relative" }}>

@@ -583,6 +583,7 @@ export default function App() {
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
         isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
+        elevationHidden={elevationHidden}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
