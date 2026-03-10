@@ -13,8 +13,10 @@ export function MapStylePicker({
   isLocationFlashOn, setIsLocationFlashOn,
   styleControlsRef,
   showRoutingUi, waypointsCount, bottomSheetHeight,
+  elevationHidden,
   onStyleMenuOpen,
 }) {
+  const hiddenByElevation = isMobile && !elevationHidden;
   const previewStyle = (style) => ({
     width: "100%",
     aspectRatio: "1 / 1",
@@ -54,7 +56,9 @@ export function MapStylePicker({
     <div ref={styleControlsRef} style={{
       position: "absolute", left: `calc(10px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos} + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
       display: "grid", gap: 8,
-      transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease",
+      opacity: hiddenByElevation ? 0 : 1,
+      pointerEvents: hiddenByElevation ? "none" : "auto",
     }}>
       {isStyleMenuOpen && (
         <div style={{

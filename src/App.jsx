@@ -56,6 +56,7 @@ export default function App() {
   const [pendingPin, setPendingPin] = useState(null);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
   const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
+  const [elevationHidden, setElevationHidden] = useState(false);
   const [panelAnimatingOut, setPanelAnimatingOut] = useState(null);
   const panelAnimOutTimer = useRef(null);
 
@@ -569,9 +570,10 @@ export default function App() {
       {showRoutingUi && waypointsRef.current.length > 0 && !(isMobile && activeMenuPanel === "library") && (
         <ElevationSheet
           routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} distanceKm={distanceKm}
-          isMobile={isMobile} bottomSheetHeight={bottomSheetHeight}
-          isGraphExpanded={isGraphExpanded} setIsGraphExpanded={setIsGraphExpanded}
+          isMobile={isMobile}
           onHoverCoordinateChange={handleElevationHoverCoordinateChange}
+          hasCyclingButton={!isMobile && mapStyle === "outdoor"}
+          hidden={elevationHidden} setHidden={setElevationHidden}
         />
       )}
 
@@ -663,6 +665,7 @@ export default function App() {
         isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
         styleControlsRef={styleControlsRef}
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length} bottomSheetHeight={bottomSheetHeight}
+        elevationHidden={elevationHidden}
         onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
       />
 
@@ -675,24 +678,32 @@ export default function App() {
 
       {mapStyle === "outdoor" && (
         <div
-          onClick={() => setShowCyclingOverlay((v) => !v)}
+          onClick={() => elevationHidden && setShowCyclingOverlay((v) => !v)}
           role="button"
           aria-pressed={showCyclingOverlay}
           style={{
-            position: "absolute", bottom: "calc(10px + env(safe-area-inset-bottom, 0px))", right: "calc(10px + env(safe-area-inset-right, 0px))", zIndex: 2,
-            background: "rgba(255,255,255,0.92)",
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            borderRadius: 999,
-            padding: "10px 16px",
-            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-            display: "flex", alignItems: "center", gap: 10,
+            position: "absolute",
+            bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+            right: 20,
+            opacity: elevationHidden ? 1 : 0,
+            pointerEvents: elevationHidden ? "auto" : "none",
+            transition: "opacity 0.2s ease",
+            zIndex: 4,
+            background: "rgba(255,255,255,0.72)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.6)",
+            borderRadius: 20,
+            padding: "7px 14px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+            display: "flex", alignItems: "center", gap: 8,
             cursor: "pointer",
             userSelect: "none", WebkitTapHighlightColor: "transparent",
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#24364b" }}>Cycling routes</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: "#0f172a", letterSpacing: 0.1 }}>Cycling routes</span>
           <div style={{
-            width: 42, height: 26, borderRadius: 999,
+            width: 32, height: 18, borderRadius: 999,
             background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
             position: "relative",
             transition: "background 0.2s ease",
@@ -700,8 +711,8 @@ export default function App() {
           }}>
             <div style={{
               position: "absolute",
-              top: 3, left: showCyclingOverlay ? 19 : 3,
-              width: 20, height: 20, borderRadius: "50%",
+              top: 2, left: showCyclingOverlay ? 14 : 2,
+              width: 14, height: 14, borderRadius: "50%",
               background: "#fff",
               boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
               transition: "left 0.2s ease",
