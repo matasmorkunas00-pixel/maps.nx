@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ROUTING_MODES } from "../constants";
 
 const GLASS = {
@@ -51,23 +52,39 @@ export function RouteToolbar({
   routingMode, setRoutingMode,
   getPressHandlers,
   pressedButton,
+  mobileVisible,
 }) {
+  // isMounted deferred by one frame so CSS transition animates from hidden → visible on mount
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setIsMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const isShown = isMounted && (isMobile ? (mobileVisible ?? true) : true);
+
   if (isMobile) {
     return (
       <>
-        {/* Top toolbar — no shared background, individual elements only */}
+        {/* Top toolbar — animated show/hide via CSS transition */}
         <div style={{
           position: "absolute",
           top: 10,
           left: "50%",
-          transform: "translateX(-50%)",
           zIndex: 6,
           width: "calc(100vw - 20px)",
           maxWidth: 480,
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          animation: "route-stats-fade-in 0.22s ease both",
+          opacity: isShown ? 1 : 0,
+          transform: isShown
+            ? "translateX(-50%) translateY(0) scale(1)"
+            : "translateX(-50%) translateY(-12px) scale(0.97)",
+          pointerEvents: isShown ? "auto" : "none",
+          transition: isShown
+            ? "opacity 0.22s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)"
+            : "opacity 0.18s ease, transform 0.2s ease",
         }}>
           {/* Row 1: route name + new + routing mode */}
           <div style={{ display: "flex", gap: 8 }}>

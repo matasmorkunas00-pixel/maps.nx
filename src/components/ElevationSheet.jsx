@@ -59,7 +59,7 @@ export function ElevationSheet({
         bottom: isMobile ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 20,
         left: isMobile ? 12 : 120,
         right: isMobile ? 12 : 20,
-        height: isMobile ? "clamp(114px, 13vh, 150px)" : "clamp(200px, 22vh, 260px)",
+        height: isMobile ? "clamp(171px, 19vh, 225px)" : "clamp(200px, 22vh, 260px)",
         ...panelBg,
         borderRadius: 14,
         boxSizing: "border-box",
