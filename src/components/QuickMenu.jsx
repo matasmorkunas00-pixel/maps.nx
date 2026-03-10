@@ -6,7 +6,7 @@ export function QuickMenu({
   quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
-  isGraphExpanded, bottomSheetHeight,
+  isGraphExpanded, bottomSheetHeight, showRoutingUi, waypointsCount,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -17,7 +17,15 @@ export function QuickMenu({
   getMenuIconButtonStyle, expandedMenuFloatingStyle, libraryPanelFloatingStyle,
   inputStyle,
 }) {
-  const topPos = isMobile && isGraphExpanded
+  // On mobile: sit just above the style picker buttons (2×44px + 10px gap = 98px) + 12px gap
+  // Style picker bottom matches MapStylePicker: bottomPos + env(safe-area-inset-bottom)
+  const stylePickerBottom = isMobile && showRoutingUi && waypointsCount > 0
+    ? `calc(${bottomSheetHeight} + 4px + env(safe-area-inset-bottom, 0px))`
+    : `calc(4px + env(safe-area-inset-bottom, 0px))`;
+  const mobileBottom = isMobile
+    ? `calc(${stylePickerBottom} + 108px)`
+    : undefined;
+  const topPos = !isMobile && isGraphExpanded
     ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
     : "50%";
 
@@ -26,14 +34,16 @@ export function QuickMenu({
       ref={quickMenuRef}
       style={{
         position: "absolute",
-        top: topPos,
+        ...(isMobile
+          ? { bottom: mobileBottom, top: "auto", transform: "none" }
+          : { top: topPos, transform: "translateY(-50%)" }
+        ),
         left: "calc(14px + env(safe-area-inset-left, 0px))",
-        transform: "translateY(-50%)",
         zIndex: 5,
         display: "grid",
         gap: 10,
         alignItems: "start",
-        transition: "top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Search */}

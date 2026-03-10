@@ -582,6 +582,7 @@ export default function App() {
         quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
         isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
+        showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
