@@ -700,25 +700,44 @@ export default function App() {
             display: "flex", alignItems: "center", gap: 8,
             cursor: "pointer",
             userSelect: "none", WebkitTapHighlightColor: "transparent",
+            lineHeight: 1,
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 500, color: "#0f172a", letterSpacing: 0.1 }}>Cycling routes</span>
-          <div style={{
-            width: 32, height: 18, borderRadius: 999,
-            background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
-            position: "relative",
-            transition: "background 0.2s ease",
-            flexShrink: 0,
-          }}>
+          {isMobile ? (
+            <span
+              key={showCyclingOverlay ? "on" : "off"}
+              style={{
+                fontSize: 12, fontWeight: 500, letterSpacing: 0.1, color: "#0f172a",
+                display: "inline-block",
+                animation: "panel-pop-in 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+              }}
+            >
+              {`Routes ${showCyclingOverlay ? "on" : "off"}`}
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: 0.1, color: "#0f172a" }}>
+              Cycling routes
+            </span>
+          )}
+          {!isMobile && (
             <div style={{
-              position: "absolute",
-              top: 2, left: showCyclingOverlay ? 14 : 2,
-              width: 14, height: 14, borderRadius: "50%",
-              background: "#fff",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-              transition: "left 0.2s ease",
-            }} />
-          </div>
+              width: 32, height: 18, borderRadius: 999,
+              background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
+              position: "relative",
+              transition: "background 0.2s ease",
+              flexShrink: 0,
+            }}>
+              <div style={{
+                position: "absolute",
+                top: 2, left: showCyclingOverlay ? 14 : 2,
+                width: 14, height: 14, borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+                transition: "left 0.2s ease",
+              }} />
+            </div>
+          )}
         </div>
       )}
     </>
