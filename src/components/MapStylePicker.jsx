@@ -16,7 +16,7 @@ export function MapStylePicker({
   elevationHidden,
   onStyleMenuOpen,
 }) {
-  const hiddenByElevation = isMobile && !elevationHidden;
+  const hiddenByElevation = isMobile && !elevationHidden && waypointsCount > 0;
   const previewStyle = (style) => ({
     width: "100%",
     aspectRatio: "1 / 1",
@@ -52,43 +52,50 @@ export function MapStylePicker({
     ? `calc(${bottomSheetHeight} + 4px)`
     : "4px";
 
+  const popupStyle = {
+    position: "absolute",
+    width: isMobile ? 168 : 176,
+    display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8,
+    padding: 6, borderRadius: 12,
+    background: "rgba(255,255,255,0.94)",
+    border: "1px solid rgba(15, 23, 42, 0.08)",
+    boxShadow: "0 12px 30px rgba(15, 23, 42, 0.18)",
+    backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+    animation: "panel-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+    ...(isMobile
+      ? { left: "calc(100% + 8px)", bottom: 0 }
+      : { bottom: "calc(100% + 8px)", left: 0 }
+    ),
+  };
+
   return (
     <div ref={styleControlsRef} style={{
-      position: "absolute", left: `calc(10px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos} + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
-      display: "grid", gap: 8,
+      position: "absolute", left: `calc(14px + env(safe-area-inset-left, 0px))`, bottom: `calc(${bottomPos} + env(safe-area-inset-bottom, 0px))`, zIndex: 5,
       transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease",
       opacity: hiddenByElevation ? 0 : 1,
       pointerEvents: hiddenByElevation ? "none" : "auto",
     }}>
-      {isStyleMenuOpen && (
-        <div style={{
-          width: isMobile ? 168 : 176,
-          display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8,
-          padding: 6, borderRadius: 12,
-          background: "rgba(255,255,255,0.94)",
-          border: "1px solid rgba(15, 23, 42, 0.08)",
-          boxShadow: "0 12px 30px rgba(15, 23, 42, 0.18)",
-          backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-          animation: "panel-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both",
-        }}>
-          <button onClick={() => setMapStyle("streets")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.streets.label}>
-            <div style={previewStyle("streets")}><img src={STREETS_PREVIEW_URL} alt="Streets map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" /></div>
-            <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Default</div>
-          </button>
-          <button onClick={() => setMapStyle("outdoor")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.outdoor.label}>
-            <div style={previewStyle("outdoor")}>
-              <img src={OUTDOOR_PREVIEW_URL} alt="Outdoor map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = STREETS_PREVIEW_URL; }} loading="lazy" />
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Cycling</div>
-          </button>
-          <button onClick={() => setMapStyle("satellite")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.satellite.label}>
-            <div style={previewStyle("satellite")}><img src={SATELLITE_PREVIEW_URL} alt="Satellite map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" /></div>
-            <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Satellite</div>
-          </button>
-        </div>
-      )}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 8 }}>
-        <button
+        <div style={{ position: "relative" }}>
+          {isStyleMenuOpen && (
+            <div style={popupStyle}>
+              <button onClick={() => setMapStyle("streets")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.streets.label}>
+                <div style={previewStyle("streets")}><img src={STREETS_PREVIEW_URL} alt="Streets map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" /></div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Default</div>
+              </button>
+              <button onClick={() => setMapStyle("outdoor")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.outdoor.label}>
+                <div style={previewStyle("outdoor")}>
+                  <img src={OUTDOOR_PREVIEW_URL} alt="Outdoor map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = STREETS_PREVIEW_URL; }} loading="lazy" />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Cycling</div>
+              </button>
+              <button onClick={() => setMapStyle("satellite")} onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()} style={mapBtnStyle} title={MAP_STYLES.satellite.label}>
+                <div style={previewStyle("satellite")}><img src={SATELLITE_PREVIEW_URL} alt="Satellite map preview" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} loading="lazy" /></div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1, textAlign: "center" }}>Satellite</div>
+              </button>
+            </div>
+          )}
+          <button
           onClick={() => { setIsMapModesFlashOn(true); const opening = !isStyleMenuOpen; setIsStyleMenuOpen(opening); if (opening) onStyleMenuOpen?.(); }}
           onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()}
           aria-label="Map style options"
@@ -99,6 +106,7 @@ export function MapStylePicker({
             <path d="M10 3.75V18.25M14 5.62V20.25" stroke="rgba(255,255,255,0.45)" strokeWidth="1.15" />
           </svg>
         </button>
+        </div>
         <button
           onClick={() => { setIsLocationFlashOn(true); setIsStyleMenuOpen(false); locateUser(); }}
           onMouseUp={(e) => e.currentTarget.blur()} onTouchEnd={(e) => e.currentTarget.blur()}
