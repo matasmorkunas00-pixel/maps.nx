@@ -564,6 +564,7 @@ export default function App() {
           pressedButton={pressedButton}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
+          mobileVisible={!isMobile || activeMenuPanel === "route"}
         />
       )}
 

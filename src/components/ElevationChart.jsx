@@ -126,7 +126,7 @@ export function ElevationChart({ routeGeoJson, onHoverCoordinateChange }) {
   }, []);
 
   const handlePointerMove = (event) => {
-    if (!data || !data.points.length || event.pointerType === "touch") return;
+    if (!data || !data.points.length) return;
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
     const pad = { left: 46, right: 12 };
@@ -191,9 +191,10 @@ export function ElevationChart({ routeGeoJson, onHoverCoordinateChange }) {
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ display: "block", cursor: "crosshair" }}
+        style={{ display: "block", cursor: "crosshair", touchAction: "none" }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
+        onPointerUp={handlePointerLeave}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
