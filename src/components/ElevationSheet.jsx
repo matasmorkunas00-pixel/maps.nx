@@ -1,39 +1,49 @@
-import { useState } from "react";
 import { ElevationChart } from "./ElevationChart";
 
 export function ElevationSheet({
   routeGeoJson, elevationGainM, elevationLossM, distanceKm,
-  isMobile, bottomSheetHeight, isGraphExpanded, setIsGraphExpanded,
-  onHoverCoordinateChange,
+  isMobile, onHoverCoordinateChange, hasCyclingButton, hidden, setHidden,
 }) {
-  const [hidden, setHidden] = useState(false);
-
-  const buttonBase = {
-    background: "rgba(255,255,255,0.9)",
+  const panelBg = {
+    background: "rgba(255,255,255,0.72)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
-    border: "none",
+    border: "1px solid rgba(255,255,255,0.6)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
+  };
+
+  // cycling button: 12px font + 7+7 padding + 2px border = 28px, gap 10px → 38px offset
+  const hiddenBottom = hasCyclingButton
+    ? "calc(10px + env(safe-area-inset-bottom, 0px) + 38px)"
+    : isMobile ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 20;
+
+  const pillStyle = {
+    background: "rgba(255,255,255,0.72)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    border: "1px solid rgba(255,255,255,0.6)",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
     borderRadius: 20,
     padding: "7px 14px",
     fontSize: 12,
     fontWeight: 500,
     color: "#0f172a",
     cursor: "pointer",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
     letterSpacing: 0.1,
     lineHeight: 1,
     whiteSpace: "nowrap",
   };
 
-  if (hidden && !isMobile) {
+  if (hidden) {
     return (
       <button
         onClick={() => setHidden(false)}
         style={{
-          ...buttonBase,
+          ...pillStyle,
           position: "absolute",
-          bottom: 20,
-          right: 20,
+          bottom: hiddenBottom,
+          right: isMobile ? "50%" : 20,
+          transform: isMobile ? "translateX(50%)" : "none",
           zIndex: 4,
         }}
       >
@@ -44,58 +54,52 @@ export function ElevationSheet({
 
   return (
     <div
-      onClick={() => isMobile && setIsGraphExpanded((v) => !v)}
       style={{
         position: "absolute",
-        bottom: isMobile ? 0 : 20,
-        left: isMobile ? 0 : 120,
-        right: isMobile ? 0 : 20,
-        height: isMobile ? bottomSheetHeight : "clamp(200px, 22vh, 260px)",
-        background: "rgba(255, 255, 255, 0.85)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderTopLeftRadius: 14,
-        borderTopRightRadius: 14,
-        borderBottomLeftRadius: isMobile ? 0 : 14,
-        borderBottomRightRadius: isMobile ? 0 : 14,
+        bottom: isMobile ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 20,
+        left: isMobile ? 12 : 120,
+        right: isMobile ? 12 : 20,
+        height: isMobile ? "clamp(114px, 13vh, 150px)" : "clamp(200px, 22vh, 260px)",
+        ...panelBg,
+        borderRadius: 14,
         boxSizing: "border-box",
-        boxShadow: "0 -4px 20px rgba(0,0,0,0.08)",
         pointerEvents: "auto",
-        transition: "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         zIndex: 4,
-        cursor: isMobile ? "pointer" : "default",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {isMobile && (
-        <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: 36, height: 3, background: "rgba(0,0,0,0.15)", borderRadius: 2 }} />
-      )}
-      {isMobile && !isGraphExpanded && (
-        <div style={{ display: "flex", gap: 24, fontSize: 13, fontWeight: 500, color: "#0f172a", padding: "24px 16px", justifyContent: "center", alignItems: "center" }}>
-          <span>{distanceKm} km</span>
-          <span>↑ {elevationGainM} m</span>
-          <span>↓ {elevationLossM} m</span>
-        </div>
-      )}
-      <div style={{ width: "100%", height: "100%", opacity: !isMobile || isGraphExpanded ? 1 : 0, transition: "opacity 0.2s ease", pointerEvents: !isMobile || isGraphExpanded ? "auto" : "none" }}>
-        <ElevationChart routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} onHoverCoordinateChange={onHoverCoordinateChange} />
-      </div>
-      {!isMobile && (
+      {/* Header: stats + hide button */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "7px 10px 0", flexShrink: 0, pointerEvents: "auto" }}>
+        <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>{distanceKm} km</span>
+        <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↑ {elevationGainM} m</span>
+        <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↓ {elevationLossM} m</span>
         <button
           onClick={() => setHidden(true)}
           style={{
-            ...buttonBase,
-            position: "absolute",
-            bottom: 8,
-            right: 10,
-            zIndex: 5,
+            background: "rgba(255,255,255,0.9)",
+            border: "none",
+            borderRadius: 20,
+            padding: "4px 10px",
             fontSize: 11,
-            padding: "5px 11px",
+            fontWeight: 500,
+            color: "#0f172a",
+            cursor: "pointer",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
+            letterSpacing: 0.1,
+            lineHeight: 1,
+            whiteSpace: "nowrap",
           }}
         >
           Hide
         </button>
-      )}
+      </div>
+
+      {/* Chart fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ElevationChart routeGeoJson={routeGeoJson} onHoverCoordinateChange={onHoverCoordinateChange} />
+      </div>
     </div>
   );
 }

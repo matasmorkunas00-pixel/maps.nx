@@ -35,9 +35,6 @@ function buildXTicks(totalDistM, minCount = 6) {
   for (let km = chosenStep; km < totalKm - 0.001; km += chosenStep) {
     ticks.push(Math.round(km * 1000));
   }
-  if (Math.abs(ticks[ticks.length - 1] - totalDistM) > 100) {
-    ticks.push(Math.round(totalDistM));
-  }
   return ticks;
 }
 
@@ -61,10 +58,13 @@ function findNearestPointIndex(points, targetDistance) {
   return Math.abs(points[current].x - targetDistance) < Math.abs(points[previous].x - targetDistance) ? current : previous;
 }
 
-export function ElevationChart({ routeGeoJson, elevationGainM, elevationLossM, onHoverCoordinateChange }) {
+export function ElevationChart({ routeGeoJson, onHoverCoordinateChange }) {
   const gradientId = useId().replace(/:/g, "");
   const hoveredIndexRef = useRef(null);
+  const containerRef = useRef(null);
   const [hoverState, setHoverState] = useState({ routeGeoJson: null, index: null });
+  const [svgDims, setSvgDims] = useState({ width: 800, height: 180 });
+
   const coords = useMemo(() => {
     const geometry = routeGeoJson?.features?.[0]?.geometry;
     if (!geometry) return [];
@@ -114,133 +114,152 @@ export function ElevationChart({ routeGeoJson, elevationGainM, elevationLossM, o
 
   useEffect(() => () => onHoverCoordinateChange?.(null), [onHoverCoordinateChange]);
 
-  if (!data) return null;
-
-  const width = 1000;
-  const height = 240;
-  const pad = { top: 16, right: 16, bottom: 36, left: 52 };
-
-  const plotWidth = Math.max(1, width - pad.left - pad.right);
-  const plotHeight = Math.max(1, height - pad.top - pad.bottom);
-
-  // Y-axis always starts from 0
-  const domainMinE = 0;
-  const rawDomainMax = data.maxE * 1.25;
-  const yStep = getNiceStep(rawDomainMax / 4);
-  const domainMaxE = Math.ceil(rawDomainMax / yStep) * yStep;
-  const rangeE = Math.max(1, domainMaxE - domainMinE);
-  const rangeX = Math.max(1, data.totalDist);
-  const baselineY = height - pad.bottom;
-
-  const yTicks = buildYTicks(domainMinE, domainMaxE, 4);
-  const xTicks = buildXTicks(data.totalDist, 6);
-
-  const getPoint = (p) => ({
-    x: pad.left + (p.x / rangeX) * plotWidth,
-    y: pad.top + (1 - (p.y - domainMinE) / rangeE) * plotHeight,
-  });
-
-  const chartPoints = data.points.map(getPoint);
-  const linePath = chartPoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const lastPoint = chartPoints[chartPoints.length - 1];
-  const firstPoint = chartPoints[0];
-  const areaPath = `${linePath} L ${lastPoint.x.toFixed(1)} ${baselineY} L ${firstPoint.x.toFixed(1)} ${baselineY} Z`;
-  const hoveredChartPoint = hoverIndex === null ? null : chartPoints[hoverIndex];
-  const hoveredDataPoint = hoverIndex === null ? null : data.points[hoverIndex];
-  const hoverDistanceKm = hoveredDataPoint ? (hoveredDataPoint.x / 1000).toFixed(1) : null;
-  const hoverElevationM = hoveredDataPoint ? Math.round(hoveredDataPoint.y) : null;
-
-  const tooltipWidth = 96;
-  const tooltipHeight = 36;
-  const tooltipX = hoveredChartPoint
-    ? Math.min(width - tooltipWidth - 4, Math.max(4, hoveredChartPoint.x - tooltipWidth / 2))
-    : 0;
-  const tooltipY = hoveredChartPoint
-    ? Math.max(4, hoveredChartPoint.y - tooltipHeight - 10)
-    : 0;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 10 && height > 10) setSvgDims({ width: Math.round(width), height: Math.round(height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handlePointerMove = (event) => {
-    if (!data.points.length || event.pointerType === "touch") return;
+    if (!data || !data.points.length || event.pointerType === "touch") return;
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
-    const rawX = ((event.clientX - rect.left) / rect.width) * width;
-    const clampedX = Math.min(width - pad.right, Math.max(pad.left, rawX));
+    const pad = { left: 46, right: 12 };
+    const plotWidth = Math.max(1, svgDims.width - pad.left - pad.right);
+    const rangeX = Math.max(1, data.totalDist);
+    const rawX = event.clientX - rect.left;
+    const clampedX = Math.min(svgDims.width - pad.right, Math.max(pad.left, rawX));
     const targetDistance = ((clampedX - pad.left) / plotWidth) * rangeX;
     updateHoverIndex(findNearestPointIndex(data.points, targetDistance));
   };
 
   const handlePointerLeave = () => updateHoverIndex(null);
 
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100%", padding: "8px 14px 10px", boxSizing: "border-box", minHeight: 0 }}>
-      <div style={{ position: "absolute", top: 8, right: 14, display: "flex", justifyContent: "flex-end", gap: 12, fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2, pointerEvents: "none" }}>
-        <span>↑ {elevationGainM} m</span>
-        <span>↓ {elevationLossM} m</span>
-      </div>
+  let chartContent = null;
+  if (data) {
+    const width = svgDims.width;
+    const height = svgDims.height;
+    const pad = { top: 10, right: 12, bottom: 30, left: 46 };
 
-      <div style={{ width: "100%", height: "100%", minHeight: 140 }}>
-        <svg
-          width="100%"
-          height="100%"
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          style={{ display: "block", cursor: "crosshair" }}
-          onPointerMove={handlePointerMove}
-          onPointerLeave={handlePointerLeave}
-        >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0f172a" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="#0f172a" stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
+    const plotWidth = Math.max(1, width - pad.left - pad.right);
+    const plotHeight = Math.max(1, height - pad.top - pad.bottom);
 
-          {yTicks.map((tick) => {
-            const y = pad.top + (1 - (tick - domainMinE) / rangeE) * plotHeight;
-            return (
-              <g key={`y-${tick}`}>
-                <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-                <text x={pad.left - 8} y={y} dy="0.35em" fontSize="12" fill="#94a3b8" textAnchor="end" fontFamily="system-ui, sans-serif">
-                  {Math.round(tick)}
-                </text>
-              </g>
-            );
-          })}
+    const domainMinE = 0;
+    const rawDomainMax = data.maxE * 1.25;
+    const yStep = getNiceStep(rawDomainMax / 4);
+    const domainMaxE = Math.ceil(rawDomainMax / yStep) * yStep;
+    const rangeE = Math.max(1, domainMaxE - domainMinE);
+    const rangeX = Math.max(1, data.totalDist);
+    const baselineY = height - pad.bottom;
 
-          {xTicks.map((tick) => {
-            const x = pad.left + (tick / rangeX) * plotWidth;
-            return (
-              <g key={`x-${tick}`}>
-                <line x1={x} y1={pad.top} x2={x} y2={baselineY} stroke="#f1f5f9" strokeWidth="1" />
-                <text x={x} y={height - 8} fontSize="12" fill="#94a3b8" textAnchor={tick === 0 ? "start" : tick === Math.round(data.totalDist) ? "end" : "middle"} fontFamily="system-ui, sans-serif">
-                  {formatXLabel(tick)}
-                </text>
-              </g>
-            );
-          })}
+    // Adapt tick count to available height: at least 32px gap between ticks
+    const yTickCount = Math.max(2, Math.floor(plotHeight / 32));
+    const yTicks = buildYTicks(domainMinE, domainMaxE, yTickCount);
+    const xTicks = buildXTicks(data.totalDist, 6);
 
-          <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-          <path d={linePath} fill="none" stroke="#0f172a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+    const getPoint = (p) => ({
+      x: pad.left + (p.x / rangeX) * plotWidth,
+      y: pad.top + (1 - (p.y - domainMinE) / rangeE) * plotHeight,
+    });
 
-          {hoveredChartPoint && hoveredDataPoint && (
-            <g pointerEvents="none">
-              <line
-                x1={hoveredChartPoint.x} y1={pad.top}
-                x2={hoveredChartPoint.x} y2={baselineY}
-                stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4"
-              />
-              <circle cx={hoveredChartPoint.x} cy={hoveredChartPoint.y} r="5" fill="#0f172a" stroke="#ffffff" strokeWidth="2" />
-              <rect x={tooltipX} y={tooltipY} rx="8" ry="8" width={tooltipWidth} height={tooltipHeight} fill="rgba(15,23,42,0.82)" />
-              <text x={tooltipX + tooltipWidth / 2} y={tooltipY + 13} fontSize="12" fill="#94a3b8" textAnchor="middle" fontFamily="system-ui, sans-serif">
-                {hoverDistanceKm} km
-              </text>
-              <text x={tooltipX + tooltipWidth / 2} y={tooltipY + 27} fontSize="12" fill="#f8fafc" textAnchor="middle" fontFamily="system-ui, sans-serif" fontWeight="500">
-                {hoverElevationM} m
+    const chartPoints = data.points.map(getPoint);
+    const linePath = chartPoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+    const lastPoint = chartPoints[chartPoints.length - 1];
+    const firstPoint = chartPoints[0];
+    const areaPath = `${linePath} L ${lastPoint.x.toFixed(1)} ${baselineY} L ${firstPoint.x.toFixed(1)} ${baselineY} Z`;
+    const hoveredChartPoint = hoverIndex === null ? null : chartPoints[hoverIndex];
+    const hoveredDataPoint = hoverIndex === null ? null : data.points[hoverIndex];
+    const hoverDistanceKm = hoveredDataPoint ? (hoveredDataPoint.x / 1000).toFixed(1) : null;
+    const hoverElevationM = hoveredDataPoint ? Math.round(hoveredDataPoint.y) : null;
+
+    const tooltipWidth = 72;
+    const tooltipHeight = 36;
+    const tooltipX = hoveredChartPoint
+      ? Math.min(width - tooltipWidth - 4, Math.max(4, hoveredChartPoint.x - tooltipWidth / 2))
+      : 0;
+    const tooltipY = hoveredChartPoint
+      ? Math.max(4, hoveredChartPoint.y - tooltipHeight - 10)
+      : 0;
+
+    chartContent = (
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ display: "block", cursor: "crosshair" }}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0f172a" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#0f172a" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {yTicks.map((tick) => {
+          const y = pad.top + (1 - (tick - domainMinE) / rangeE) * plotHeight;
+          return (
+            <g key={`y-${tick}`}>
+              <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+              <text x={pad.left - 6} y={y} dy="0.35em" fontSize="11" fill="#94a3b8" textAnchor="end" fontFamily="system-ui, sans-serif">
+                {Math.round(tick)}
               </text>
             </g>
-          )}
-        </svg>
-      </div>
+          );
+        })}
+
+        {xTicks.map((tick) => {
+          const x = pad.left + (tick / rangeX) * plotWidth;
+          return (
+            <g key={`x-${tick}`}>
+              <line x1={x} y1={pad.top} x2={x} y2={baselineY} stroke="#f1f5f9" strokeWidth="1" />
+              <text
+                x={x}
+                y={height - 7}
+                fontSize="11"
+                fill="#94a3b8"
+                textAnchor={tick === 0 ? "start" : "middle"}
+                fontFamily="system-ui, sans-serif"
+              >
+                {formatXLabel(tick)}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
+        <path d={linePath} fill="none" stroke="#0f172a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+        {hoveredChartPoint && hoveredDataPoint && (
+          <g pointerEvents="none">
+            <line
+              x1={hoveredChartPoint.x} y1={pad.top}
+              x2={hoveredChartPoint.x} y2={baselineY}
+              stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4"
+            />
+            <circle cx={hoveredChartPoint.x} cy={hoveredChartPoint.y} r="5" fill="#0f172a" stroke="#ffffff" strokeWidth="2" />
+            <rect x={tooltipX} y={tooltipY} rx="8" ry="8" width={tooltipWidth} height={tooltipHeight} fill="rgba(15,23,42,0.82)" />
+            <text x={tooltipX + tooltipWidth / 2} y={tooltipY + 13} fontSize="12" fill="#94a3b8" textAnchor="middle" fontFamily="system-ui, sans-serif">
+              {hoverDistanceKm} km
+            </text>
+            <text x={tooltipX + tooltipWidth / 2} y={tooltipY + 27} fontSize="12" fill="#f8fafc" textAnchor="middle" fontFamily="system-ui, sans-serif" fontWeight="500">
+              {hoverElevationM} m
+            </text>
+          </g>
+        )}
+      </svg>
+    );
+  }
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%", minHeight: 0 }}>
+      {chartContent}
     </div>
   );
 }
