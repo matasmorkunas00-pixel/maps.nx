@@ -409,6 +409,55 @@ function createMarkerElement(rainbow = false) {
   return el;
 }
 
+function createShapeMarkerElement() {
+  // Solid orange circle — used for waypoints created by dragging a midpoint handle
+  const outer = document.createElement("div");
+  outer.style.cssText = "width:20px;height:20px;cursor:grab;display:flex;align-items:center;justify-content:center;touch-action:none;";
+  const inner = document.createElement("div");
+  inner.style.cssText = [
+    "width:11px",
+    "height:11px",
+    "border-radius:50%",
+    "background:#ff5500",
+    "border:2px solid #fff",
+    "box-shadow:0 1px 4px rgba(0,0,0,0.4)",
+    "box-sizing:border-box",
+    "transition:transform 0.12s ease",
+    "pointer-events:none",
+  ].join(";");
+  outer.appendChild(inner);
+  outer.addEventListener("mouseenter", () => { inner.style.transform = "scale(1.3)"; });
+  outer.addEventListener("mouseleave", () => { inner.style.transform = "scale(1)"; });
+  return outer;
+}
+
+function createMidpointMarkerElement() {
+  // MapLibre applies its positioning transform to the outer element.
+  // We must NOT touch the outer element's transform — doing so overwrites
+  // MapLibre's translate and causes the marker to jump off-screen.
+  const outer = document.createElement("div");
+  outer.style.cssText = "width:20px;height:20px;cursor:grab;display:flex;align-items:center;justify-content:center;touch-action:none;";
+
+  // All visual styling lives on the inner element, which we can freely animate.
+  const inner = document.createElement("div");
+  inner.style.cssText = [
+    "width:14px",
+    "height:14px",
+    "border-radius:50%",
+    "background:#fff",
+    "border:2.5px solid #ff5500",
+    "box-shadow:0 1px 4px rgba(0,0,0,0.3)",
+    "box-sizing:border-box",
+    "transition:transform 0.12s ease",
+    "pointer-events:none",
+  ].join(";");
+
+  outer.appendChild(inner);
+  outer.addEventListener("mouseenter", () => { inner.style.transform = "scale(1.4)"; });
+  outer.addEventListener("mouseleave", () => { inner.style.transform = "scale(1)"; });
+  return outer;
+}
+
 function calculateElevationProfile(geojson) {
   const coords = geojson?.features?.[0]?.geometry?.coordinates;
   if (!coords || coords.length < 3) return { gain: 0, loss: 0 };
@@ -432,7 +481,9 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const appleMapKitRef = useRef(null);
   const appleMapReadyRef = useRef(false);
   const waypointsRef = useRef([]);
+  const waypointTypesRef = useRef([]); // 'pin' | 'shape' per waypoint
   const markersRef = useRef([]);
+  const midpointMarkersRef = useRef([]);
   const segmentLabelMarkersRef = useRef([]);
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
@@ -604,6 +655,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           const idx = markersRef.current.indexOf(marker);
           if (idx === -1) return;
           waypointsRef.current.splice(idx, 1);
+          waypointTypesRef.current.splice(idx, 1);
           markersRef.current.splice(idx, 1);
           marker.remove();
           if (waypointsRef.current.length < 2) {
@@ -620,10 +672,14 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       }
 
       function renderMarkers() {
+        clearMidpointHandles();
         markersRef.current.forEach((m) => m.remove());
         markersRef.current = [];
         waypointsRef.current.forEach(([lng, lat], idx) => {
-          const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true, anchor: 'bottom' })
+          const isShape = waypointTypesRef.current[idx] === 'shape';
+          const el = isShape ? createShapeMarkerElement() : createMarkerElement(speedModeRef.current);
+          const anchor = isShape ? 'center' : 'bottom';
+          const marker = new maplibregl.Marker({ element: el, draggable: true, anchor })
             .setLngLat([lng, lat])
             .addTo(map);
           marker.on("dragend", () => {
@@ -695,6 +751,94 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         }
       }
 
+      function clearMidpointHandles() {
+        midpointMarkersRef.current.forEach((m) => m.remove());
+        midpointMarkersRef.current = [];
+      }
+
+      function showDragLines(fromCoord, midCoord, toCoord) {
+        const source = map.getSource("midpoint-drag");
+        if (!source) return;
+        source.setData({
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", geometry: { type: "LineString", coordinates: [fromCoord, midCoord] } },
+            { type: "Feature", geometry: { type: "LineString", coordinates: [midCoord, toCoord] } },
+          ],
+        });
+        if (map.getLayer("midpoint-drag")) {
+          map.setLayoutProperty("midpoint-drag", "visibility", "visible");
+        }
+      }
+
+      function hideDragLines() {
+        if (map.getLayer("midpoint-drag")) {
+          map.setLayoutProperty("midpoint-drag", "visibility", "none");
+          map.getSource("midpoint-drag")?.setData({ type: "FeatureCollection", features: [] });
+        }
+      }
+
+      function renderMidpointHandles(routeData) {
+        clearMidpointHandles();
+        if (waypointsRef.current.length < 2) return;
+        const props = routeData?.features?.[0]?.properties;
+        const coords = routeData?.features?.[0]?.geometry?.coordinates;
+        if (!props || !coords) return;
+        const wayPts = props.way_points;
+        if (!wayPts || wayPts.length < 2) return;
+
+        for (let i = 0; i < wayPts.length - 1; i++) {
+          // Only show handle between two consecutive pin waypoints
+          if ((waypointTypesRef.current[i] || 'pin') !== 'pin' ||
+              (waypointTypesRef.current[i + 1] || 'pin') !== 'pin') continue;
+
+          const startIdx = wayPts[i];
+          const endIdx = wayPts[i + 1];
+          const midIdx = Math.round((startIdx + endIdx) / 2);
+          const midCoord = coords[midIdx];
+          if (!midCoord) continue;
+
+          const insertAfterIndex = i;
+          const marker = new maplibregl.Marker({
+            element: createMidpointMarkerElement(),
+            draggable: true,
+            anchor: "center",
+          }).setLngLat([midCoord[0], midCoord[1]]).addTo(map);
+
+          let rafId = null;
+
+          marker.on("dragstart", () => {
+            midpointMarkersRef.current.forEach((m) => {
+              if (m !== marker) m.getElement().style.opacity = "0.3";
+            });
+            const fromCoord = waypointsRef.current[insertAfterIndex];
+            const toCoord = waypointsRef.current[insertAfterIndex + 1];
+
+            // rAF loop: reads marker.getLngLat() every frame — works on desktop and mobile
+            // without any document event listener management.
+            const tick = () => {
+              const pos = marker.getLngLat();
+              showDragLines(fromCoord, [pos.lng, pos.lat], toCoord);
+              rafId = requestAnimationFrame(tick);
+            };
+            rafId = requestAnimationFrame(tick);
+          });
+
+          marker.on("dragend", () => {
+            if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+            hideDragLines();
+            const p = marker.getLngLat();
+            clearMidpointHandles();
+            waypointsRef.current.splice(insertAfterIndex + 1, 0, [p.lng, p.lat]);
+            waypointTypesRef.current.splice(insertAfterIndex + 1, 0, 'shape');
+            renderMarkers();
+            calculateRoute();
+          });
+
+          midpointMarkersRef.current.push(marker);
+        }
+      }
+
       function clearRouteState() {
         elevationHoverCoordRef.current = null;
         removeRouteHoverLayers(map);
@@ -705,6 +849,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         setElevationLossM("0");
         clearRouteLayer();
         clearSegmentLabels();
+        clearMidpointHandles();
       }
 
       function calculateRoute() {
@@ -778,6 +923,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
           addRouteLayers(map, data);
           renderSegmentLabels(data);
+          renderMidpointHandles(data);
         } catch (err) {
           clearTimeout(timeout);
           if (err.name === "AbortError") {
@@ -799,6 +945,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const addWaypoint = (lng, lat) => {
         const index = waypointsRef.current.length;
         waypointsRef.current.push([lng, lat]);
+        waypointTypesRef.current.push('pin');
 
         const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true, anchor: 'bottom' })
           .setLngLat([lng, lat])
@@ -813,7 +960,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         fns.current.calculateRoute();
       };
 
-      fns.current = { calculateRoute, _doCalculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint, renderSegmentLabels, clearSegmentLabels };
+      fns.current = { calculateRoute, _doCalculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint, renderSegmentLabels, clearSegmentLabels, renderMidpointHandles, clearMidpointHandles };
 
     // --- Map events ---
     map.on("load", () => {
@@ -823,6 +970,10 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       addImportedLayer(map, importedGeoJsonRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
+
+      // Persistent drag-line layer (hidden until a midpoint handle is dragged)
+      map.addSource("midpoint-drag", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "midpoint-drag", type: "line", source: "midpoint-drag", layout: { visibility: "none" }, paint: { "line-color": "#ff5500", "line-width": 2 } });
 
         map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
@@ -840,6 +991,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           if (nearest && nearest.dist2 < 35 * 35) {
             const idx = getWaypointInsertIndex(routeDataRef.current, nearest.routeSegmentIndex, waypointsRef.current.length);
             waypointsRef.current.splice(idx, 0, nearest.point);
+            waypointTypesRef.current.splice(idx, 0, 'pin');
             renderMarkers();
             calculateRoute();
             return;
@@ -937,6 +1089,10 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
+      if (!map.getSource("midpoint-drag")) {
+        map.addSource("midpoint-drag", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({ id: "midpoint-drag", type: "line", source: "midpoint-drag", layout: { visibility: "none" }, paint: { "line-color": "#ff5500", "line-width": 2 } });
+      }
       if (elevationHoverCoordRef.current) addRouteHoverLayers(map, elevationHoverCoordRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
@@ -1001,6 +1157,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const undoLast = () => {
     if (!waypointsRef.current.length) return;
     waypointsRef.current.pop();
+    waypointTypesRef.current.pop();
     const marker = markersRef.current.pop();
     if (marker) marker.remove();
     if (waypointsRef.current.length < 2) {
@@ -1012,6 +1169,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
   const clearAll = () => {
     waypointsRef.current = [];
+    waypointTypesRef.current = [];
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
     fns.current?.clearRouteState();
@@ -1035,6 +1193,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       [startCoords[0], startCoords[1]],
       [endCoords[0], endCoords[1]],
     ];
+    waypointTypesRef.current = ['pin', 'pin'];
     fns.current?.renderMarkers();
     fns.current?.calculateRoute();
     const lngs = waypointsRef.current.map((p) => p[0]);
@@ -1132,6 +1291,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     elevationHoverCoordRef.current = null;
     removeRouteHoverLayers(map);
     waypointsRef.current = (savedRoute.waypoints || []).map(([lng, lat]) => [lng, lat]);
+    waypointTypesRef.current = waypointsRef.current.map(() => 'pin');
     routeDataRef.current = savedRoute.routeGeoJson || null;
 
     setDistanceKm(String(savedRoute.distanceKm || "0.00"));
@@ -1145,6 +1305,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     if (routeDataRef.current) {
       addRouteLayers(map, routeDataRef.current);
       fns.current?.renderSegmentLabels(routeDataRef.current);
+      fns.current?.renderMidpointHandles(routeDataRef.current);
     }
 
     if (waypointsRef.current.length) {
