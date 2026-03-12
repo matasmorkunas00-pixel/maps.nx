@@ -139,22 +139,6 @@ export function QuickMenu({
         transition: "top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
-      {activeMenuPanel === "library" && !isMobile && (
-        <div
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            toggleMenuPanel("library");
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 20,
-            background: "transparent",
-          }}
-        />
-      )}
-
       {/* Search */}
       <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}>
         <button onClick={() => toggleMenuPanel("search")} style={getMenuIconButtonStyle("search")} aria-label="Search places">
