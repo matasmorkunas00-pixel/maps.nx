@@ -361,7 +361,9 @@ function applyCyclingOverlay(map, mapStyle, show) {
     } else {
       map.setLayoutProperty("cycling-overlay", "visibility", show ? "visible" : "none");
     }
-  } catch {}
+  } catch {
+    // Ignore overlay source/layer failures for styles that do not support it.
+  }
 }
 
 function getBaseStyle(mapStyle, useAppleSatellite) {
