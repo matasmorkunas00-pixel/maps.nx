@@ -378,37 +378,31 @@ function getBaseStyleKey(mapStyle, useAppleSatellite) {
 // ---------- Rainbow marker ----------
 
 function createMarkerElement(rainbow = false) {
-  const el = document.createElement("div");
   if (rainbow) {
+    const el = document.createElement("div");
     el.innerHTML = '🌈';
     el.style.fontSize = '24px';
     el.style.textShadow = '0 0 4px rgba(0,0,0,0.3)';
-  } else {
-    el.innerHTML = `<svg display="block" height="41px" width="27px" viewBox="0 0 27 41">
-      <g fill-rule="nonzero">
-        <g transform="translate(3.0, 29.0)" fill="#000000">
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="10.5" ry="5.25"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="9.5" ry="4.77"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="8.5" ry="4.3"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="7.5" ry="3.82"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="6.5" ry="3.34"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="5.5" ry="2.86"></ellipse>
-          <ellipse opacity="0.04" cx="10.5" cy="5.8" rx="4.5" ry="2.39"></ellipse>
-        </g>
-        <g class="marker-body" fill="#3FB1CE">
-          <path d="M27,13.5 C27,19.074644 20.250001,27.000002 14.75,34.500002 C14.016665,35.500004 12.983335,35.500004 12.25,34.500002 C6.7499993,27.000002 0,19.222562 0,13.5 C0,6.0441559 6.0441559,0 13.5,0 C20.955844,0 27,6.0441559 27,13.5 Z"></path>
-        </g>
-        <g opacity="0.25" fill="#000000">
-          <path d="M13.5,0 C6.0441559,0 0,6.0441559 0,13.5 C0,19.222562 6.7499993,27 12.25,34.5 C13,35.522727 14.016664,35.500004 14.75,34.5 C20.250001,27 27,19.074644 27,13.5 C27,6.0441559 20.955844,0 13.5,0 Z M13.5,1 C20.415404,1 26,6.584596 26,13.5 C26,15.898657 24.495584,19.181431 22.220703,22.738281 C19.945823,26.295132 16.705119,30.142167 13.943359,33.908203 C13.743445,34.180814 13.612715,34.322738 13.5,34.441406 C13.387285,34.322738 13.256555,34.180814 13.056641,33.908203 C10.284481,30.127985 7.4148684,26.314159 5.015625,22.773438 C2.6163816,19.232715 1,15.953538 1,13.5 C1,6.584596 6.584596,1 13.5,1 Z"></path>
-        </g>
-        <g transform="translate(8.0, 8.0)">
-          <circle fill="#000000" opacity="0.25" cx="5.5" cy="5.5" r="5.5"></circle>
-          <circle fill="#FFFFFF" cx="5.5" cy="5.5" r="5.5"></circle>
-        </g>
-      </g>
-    </svg>`;
+    return el;
   }
-  return el;
+  const outer = document.createElement("div");
+  outer.style.cssText = "width:20px;height:20px;cursor:grab;display:flex;align-items:center;justify-content:center;touch-action:none;";
+  const inner = document.createElement("div");
+  inner.style.cssText = [
+    "width:11px",
+    "height:11px",
+    "border-radius:50%",
+    "background:#ff5500",
+    "border:2px solid #fff",
+    "box-shadow:0 1px 4px rgba(0,0,0,0.4)",
+    "box-sizing:border-box",
+    "transition:transform 0.12s ease",
+    "pointer-events:none",
+  ].join(";");
+  outer.appendChild(inner);
+  outer.addEventListener("mouseenter", () => { inner.style.transform = "scale(1.3)"; });
+  outer.addEventListener("mouseleave", () => { inner.style.transform = "scale(1)"; });
+  return outer;
 }
 
 function createShapeMarkerElement() {
@@ -491,6 +485,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const geolocateControlRef = useRef(null);
   const userLocationRef = useRef(null);
   const userMarkerRef = useRef(null);
+  const pendingPinMarkerRef = useRef(null);
   const currentMapStyleRef = useRef(getBaseStyleKey(mapStyle, false));
   const onFirstClickRef = useRef(onFirstClick);
   const elevationHoverCoordRef = useRef(null);
@@ -680,7 +675,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         waypointsRef.current.forEach(([lng, lat], idx) => {
           const isShape = waypointTypesRef.current[idx] === 'shape';
           const el = isShape ? createShapeMarkerElement() : createMarkerElement(speedModeRef.current);
-          const anchor = isShape ? 'center' : 'bottom';
+          const anchor = 'center';
           const marker = new maplibregl.Marker({ element: el, draggable: true, anchor })
             .setLngLat([lng, lat])
             .addTo(map);
@@ -758,27 +753,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         midpointMarkersRef.current = [];
       }
 
-      function showDragLines(fromCoord, midCoord, toCoord) {
-        const source = map.getSource("midpoint-drag");
-        if (!source) return;
-        source.setData({
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", geometry: { type: "LineString", coordinates: [fromCoord, midCoord] } },
-            { type: "Feature", geometry: { type: "LineString", coordinates: [midCoord, toCoord] } },
-          ],
-        });
-        if (map.getLayer("midpoint-drag")) {
-          map.setLayoutProperty("midpoint-drag", "visibility", "visible");
-        }
-      }
-
-      function hideDragLines() {
-        if (map.getLayer("midpoint-drag")) {
-          map.setLayoutProperty("midpoint-drag", "visibility", "none");
-          map.getSource("midpoint-drag")?.setData({ type: "FeatureCollection", features: [] });
-        }
-      }
 
       function renderMidpointHandles(routeData) {
         clearMidpointHandles();
@@ -807,28 +781,13 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
             anchor: "center",
           }).setLngLat([midCoord[0], midCoord[1]]).addTo(map);
 
-          let rafId = null;
-
           marker.on("dragstart", () => {
             midpointMarkersRef.current.forEach((m) => {
               if (m !== marker) m.getElement().style.opacity = "0.3";
             });
-            const fromCoord = waypointsRef.current[insertAfterIndex];
-            const toCoord = waypointsRef.current[insertAfterIndex + 1];
-
-            // rAF loop: reads marker.getLngLat() every frame — works on desktop and mobile
-            // without any document event listener management.
-            const tick = () => {
-              const pos = marker.getLngLat();
-              showDragLines(fromCoord, [pos.lng, pos.lat], toCoord);
-              rafId = requestAnimationFrame(tick);
-            };
-            rafId = requestAnimationFrame(tick);
           });
 
           marker.on("dragend", () => {
-            if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-            hideDragLines();
             const p = marker.getLngLat();
             clearMidpointHandles();
             waypointsRef.current.splice(insertAfterIndex + 1, 0, [p.lng, p.lat]);
@@ -893,7 +852,12 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
             {
               method: "POST",
               headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
-              body: JSON.stringify({ coordinates: routeWaypoints, elevation: true }),
+              body: JSON.stringify({
+                coordinates: routeWaypoints,
+                elevation: true,
+                ...(mode.preference ? { preference: mode.preference } : {}),
+                ...(mode.options ? { options: mode.options } : {}),
+              }),
               signal: controller.signal,
             }
           );
@@ -949,7 +913,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         waypointsRef.current.push([lng, lat]);
         waypointTypesRef.current.push('pin');
 
-        const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true, anchor: 'bottom' })
+        const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true, anchor: 'center' })
           .setLngLat([lng, lat])
           .addTo(map);
         marker.on("dragend", () => {
@@ -973,9 +937,6 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
 
-      // Persistent drag-line layer (hidden until a midpoint handle is dragged)
-      map.addSource("midpoint-drag", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      map.addLayer({ id: "midpoint-drag", type: "line", source: "midpoint-drag", layout: { visibility: "none" }, paint: { "line-color": "#ff5500", "line-width": 2 } });
 
         map.on("mouseenter", "route-hit-area", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "route-hit-area", () => { map.getCanvas().style.cursor = ""; });
@@ -1003,6 +964,28 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         // Handle adding a new waypoint
         const { lng, lat } = e.lngLat;
         if (waypointsRef.current.length === 0 && onFirstClickRef.current) {
+          // Show pending pin marker
+          if (pendingPinMarkerRef.current) {
+            pendingPinMarkerRef.current.remove();
+            pendingPinMarkerRef.current = null;
+          }
+          const el = document.createElement("div");
+          el.style.cssText = "width:20px;height:20px;display:flex;align-items:center;justify-content:center;";
+          const inner = document.createElement("div");
+          inner.style.cssText = [
+            "width:14px",
+            "height:14px",
+            "border-radius:50%",
+            "background:#fff",
+            "border:2.5px solid #ff5500",
+            "box-shadow:0 1px 4px rgba(0,0,0,0.3)",
+            "box-sizing:border-box",
+            "pointer-events:none",
+          ].join(";");
+          el.appendChild(inner);
+          pendingPinMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
+            .setLngLat([lng, lat])
+            .addTo(map);
           onFirstClickRef.current({ lng, lat });
         } else {
           addWaypoint(lng, lat);
@@ -1091,10 +1074,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
       const imported = importedGeoJsonRef.current;
       if (imported.features.length) addImportedLayer(map, imported);
       if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
-      if (!map.getSource("midpoint-drag")) {
-        map.addSource("midpoint-drag", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-        map.addLayer({ id: "midpoint-drag", type: "line", source: "midpoint-drag", layout: { visibility: "none" }, paint: { "line-color": "#ff5500", "line-width": 2 } });
-      }
+
       if (elevationHoverCoordRef.current) addRouteHoverLayers(map, elevationHoverCoordRef.current);
       applyGaiaLikeOutdoorTone(map, mapStyle);
       applySatelliteGoogleLikeTone(map, mapStyle);
@@ -1392,5 +1372,11 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     setElevationHoverCoordinate,
     clearElevationHoverCoordinate,
     getCurrentLocation,
+    clearPendingPinMarker: () => {
+      if (pendingPinMarkerRef.current) {
+        pendingPinMarkerRef.current.remove();
+        pendingPinMarkerRef.current = null;
+      }
+    },
   };
 }

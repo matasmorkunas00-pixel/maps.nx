@@ -12,7 +12,6 @@ import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateClo
 import { createStyleHelpers } from "./styles/appStyles";
 import { RouteToolbar } from "./components/RouteToolbar";
 import { ElevationSheet } from "./components/ElevationSheet";
-import { MapStylePicker } from "./components/MapStylePicker";
 import { PendingPinDialog } from "./components/PendingPinDialog";
 import { QuickMenu } from "./components/QuickMenu";
 import { SearchPanel } from "./components/SearchPanel";
@@ -28,7 +27,7 @@ export default function App() {
   const skipNextSearchRef = useRef(false);
 
   const [routeName, setRouteName] = useState("My Route");
-  const [routingMode, setRoutingMode] = useState("gravel");
+  const [routingMode, setRoutingMode] = useState("default");
   const [mapStyle, setMapStyle] = useState("streets");
   const [pressedButton, setPressedButton] = useState(null);
   const [newFolderName, setNewFolderName] = useState("");
@@ -73,7 +72,6 @@ export default function App() {
   useEffect(() => {
     const onPointerDown = (event) => {
       if (!searchBoxRef.current?.contains(event.target)) setIsSearchDropdownOpen(false);
-      if (!styleControlsRef.current?.contains(event.target)) setIsStyleMenuOpen(false);
     };
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
@@ -219,9 +217,9 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
-  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
+  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation, clearPendingPinMarker } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
-    onFirstClick: (lngLat) => { setPendingPin(lngLat); setActiveMenuPanel(null); setIsStyleMenuOpen(false); },
+    onFirstClick: (lngLat) => { setPendingPin(lngLat); setActiveMenuPanel(null); },
   });
 
   const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
@@ -237,10 +235,11 @@ export default function App() {
 
   // --- Handlers ---
 
-  const handleLocationNo = () => { if (!pendingPin) return; addWaypoint(pendingPin.lng, pendingPin.lat); setPendingPin(null); };
-  const handleLocationCancel = () => setPendingPin(null);
+  const handleLocationNo = () => { if (!pendingPin) return; clearPendingPinMarker(); addWaypoint(pendingPin.lng, pendingPin.lat); setPendingPin(null); };
+  const handleLocationCancel = () => { clearPendingPinMarker(); setPendingPin(null); };
   const handleLocationYes = async () => {
     if (!pendingPin) return;
+    clearPendingPinMarker();
     try {
       const loc = await getCurrentLocation();
       if (loc) { addWaypoint(loc[0], loc[1]); addWaypoint(pendingPin.lng, pendingPin.lat); }
@@ -595,6 +594,13 @@ export default function App() {
         expandedMenuFloatingStyle={expandedMenuFloatingStyle}
         libraryPanelFloatingStyle={libraryPanelFloatingStyle}
         inputStyle={inputStyle}
+        mapStyle={mapStyle} setMapStyle={setMapStyle}
+        locateUser={locateUser} locationState={locationState}
+        isStyleMenuOpen={isStyleMenuOpen} setIsStyleMenuOpen={setIsStyleMenuOpen}
+        isMapModesFlashOn={isMapModesFlashOn} setIsMapModesFlashOn={setIsMapModesFlashOn}
+        isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
+        onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
+        styleControlsRef={styleControlsRef}
       />
 
       {isMobile && (activeMenuPanel === "library" || panelAnimatingOut === "library") && (
@@ -659,24 +665,12 @@ export default function App() {
         </div>
       )}
 
-      <MapStylePicker
-        mapStyle={mapStyle} setMapStyle={setMapStyle}
-        locateUser={locateUser} locationState={locationState}
-        isMobile={isMobile}
-        isStyleMenuOpen={isStyleMenuOpen} setIsStyleMenuOpen={setIsStyleMenuOpen}
-        isMapModesFlashOn={isMapModesFlashOn} setIsMapModesFlashOn={setIsMapModesFlashOn}
-        isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
-        styleControlsRef={styleControlsRef}
-        showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length} bottomSheetHeight={bottomSheetHeight}
-        elevationHidden={elevationHidden}
-        onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
-      />
-
-      <PendingPinDialog
+<PendingPinDialog
         pendingPin={pendingPin}
         handleLocationYes={handleLocationYes} handleLocationNo={handleLocationNo}
         handleLocationCancel={handleLocationCancel}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
+        getCurrentLocation={getCurrentLocation}
       />
 
       {mapStyle === "outdoor" && (

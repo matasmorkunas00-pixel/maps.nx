@@ -6,6 +6,13 @@ export const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_API_KEY || "Hyv4x1
 export const THUNDERFOREST_API_KEY = import.meta.env.VITE_THUNDERFOREST_API_KEY || "fc0d0a369cee4df2b86e638288aef7a6";
 
 export const ROUTING_MODES = {
+  default: {
+    label: "Default",
+    profile: "cycling-mountain",
+    snapRadius: null,
+    preference: "shortest",
+    options: { avoid_features: ["steps", "ferries"] },
+  },
   gravel: { label: "Gravel", profile: "cycling-mountain", snapRadius: null },
   regular: { label: "Balanced", profile: "cycling-regular", snapRadius: null },
   mainRoads: { label: "Main roads", profile: "driving-car", snapRadius: 25 },
