@@ -50,7 +50,6 @@ export function RouteToolbar({
   routeName, setRouteName,
   newRoute,
   routingMode, setRoutingMode,
-  getPressHandlers, getButtonStyle, inputStyle,
   getPressHandlers,
   pressedButton,
   mobileVisible,

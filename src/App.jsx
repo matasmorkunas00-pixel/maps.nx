@@ -560,7 +560,7 @@ export default function App() {
           routeName={routeName} setRouteName={setRouteName}
           newRoute={newRoute}
           routingMode={routingMode} setRoutingMode={setRoutingMode}
-          getPressHandlers={getPressHandlers} getButtonStyle={getButtonStyle} inputStyle={inputStyle}
+          getPressHandlers={getPressHandlers}
           pressedButton={pressedButton}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
