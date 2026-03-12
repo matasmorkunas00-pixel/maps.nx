@@ -14,7 +14,6 @@ export function QuickMenu({
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
   isGraphExpanded, bottomSheetHeight,
-  hasUnseenSavedRoute,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -208,29 +207,11 @@ export function QuickMenu({
           onMouseUp={(e) => e.currentTarget.blur()}
           onTouchEnd={(e) => e.currentTarget.blur()}
           aria-label="GPX library"
-          style={{ ...getMenuIconButtonStyle("library"), position: "relative", overflow: "visible" }}
+          style={getMenuIconButtonStyle("library")}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3.5 7.5C3.5 6.4 4.4 5.5 5.5 5.5H10L12 7.5H18.5C19.6 7.5 20.5 8.4 20.5 9.5V16.5C20.5 17.6 19.6 18.5 18.5 18.5H5.5C4.4 18.5 3.5 17.6 3.5 16.5V7.5Z" stroke="#24364b" strokeWidth="1.7" />
           </svg>
-          {hasUnseenSavedRoute && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                width: 10,
-                height: 10,
-                borderRadius: 999,
-                background: "linear-gradient(180deg, #34d399 0%, #16a34a 100%)",
-                border: "2px solid rgba(255,255,255,0.96)",
-                boxShadow: "0 0 0 1px rgba(15,23,42,0.04), 0 6px 16px rgba(22,163,74,0.4)",
-                animation: "save-indicator-pulse 1.8s ease-in-out infinite",
-                pointerEvents: "none",
-              }}
-            />
-          )}
         </button>
         {activeMenuPanel === "library" && !isMobile && (
           <div style={{ ...libraryPanelFloatingStyle, overflowY: "auto" }}>

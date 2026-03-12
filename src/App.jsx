@@ -46,8 +46,8 @@ export default function App() {
   const [cloudRoutesError, setCloudRoutesError] = useState(null);
   const [libraryError, setLibraryError] = useState(null);
   const [libraryMessage, setLibraryMessage] = useState(null);
-  const [saveFeedbackTick, setSaveFeedbackTick] = useState(0);
-  const [hasUnseenSavedRoute, setHasUnseenSavedRoute] = useState(false);
+  const [savedRouteRevealTick, setSavedRouteRevealTick] = useState(0);
+  const [savedRoutesSort, setSavedRoutesSort] = useState("newest");
   const [isCloudRoutesLoading, setIsCloudRoutesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -80,9 +80,6 @@ export default function App() {
   }, []);
 
   useEffect(() => { if (activeMenuPanel !== "search") setIsSearchDropdownOpen(false); }, [activeMenuPanel]);
-  useEffect(() => {
-    if (activeMenuPanel === "library") setHasUnseenSavedRoute(false);
-  }, [activeMenuPanel]);
 
   useEffect(() => {
     if (!isMapModesFlashOn) return;
@@ -257,8 +254,10 @@ export default function App() {
     const entry = { id: activeRouteId || uid(), name: routeName || "My Route", createdAt: new Date().toISOString(), routingMode, waypoints: waypointsRef.current, routeGeoJson: routeDataRef.current, distanceKm, elevationGainM, elevationLossM };
     setRoutes((prev) => { const exists = prev.find((r) => r.id === entry.id); return exists ? prev.map((r) => r.id === entry.id ? entry : r) : [entry, ...prev]; });
     setActiveRouteId(entry.id);
-    setHasUnseenSavedRoute(activeMenuPanel !== "library");
-    setSaveFeedbackTick((cur) => cur + 1);
+    setSavedRouteRevealTick((cur) => cur + 1);
+    setIsStyleMenuOpen(false);
+    if (isMobile) setIsGraphExpanded(false);
+    setActiveMenuPanel("library");
   };
 
   const loadRoute = (id) => {
@@ -538,6 +537,8 @@ export default function App() {
     importedRoutes, cloudImportedRoutes, routes, activeRouteId,
     availableFolders, activeVisibleFolders, openFolders, selectedRouteIdsByFolder, bulkMoveTargets,
     libraryError, libraryMessage,
+    savedRouteRevealTick,
+    savedRoutesSort, setSavedRoutesSort,
     newFolderName, setNewFolderName,
     toggleFolderVisibility, toggleFolderOpen, selectAllRoutesInFolder, clearFolderSelection,
     toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor,
@@ -568,7 +569,6 @@ export default function App() {
           routingMode={routingMode} setRoutingMode={setRoutingMode}
           getPressHandlers={getPressHandlers}
           pressedButton={pressedButton}
-          saveFeedbackTick={saveFeedbackTick}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
           mobileVisible={!isMobile || activeMenuPanel === "route"}
@@ -592,7 +592,6 @@ export default function App() {
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
         elevationHidden={elevationHidden}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
-        hasUnseenSavedRoute={hasUnseenSavedRoute}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
         isSearchDropdownOpen={isSearchDropdownOpen} setIsSearchDropdownOpen={setIsSearchDropdownOpen}
