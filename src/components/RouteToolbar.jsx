@@ -26,7 +26,7 @@ const iconBtn = (pressed, stretch = false) => ({
   flexShrink: 0,
   WebkitTapHighlightColor: "transparent",
   outline: "none",
-  transition: "background-color 0.15s ease, transform 0.15s ease",
+  transition: "background-color 0.15s ease, transform 0.15s ease, border-color 0.18s ease, box-shadow 0.18s ease",
   transform: pressed ? "scale(0.9)" : "scale(1)",
 });
 
@@ -52,16 +52,75 @@ export function RouteToolbar({
   routingMode, setRoutingMode,
   getPressHandlers,
   pressedButton,
+  saveFeedbackTick,
   mobileVisible,
 }) {
   // isMounted deferred by one frame so CSS transition animates from hidden → visible on mount
   const [isMounted, setIsMounted] = useState(false);
+  const [isSaveConfirmed, setIsSaveConfirmed] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setIsMounted(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
+  useEffect(() => {
+    if (!saveFeedbackTick) return;
+    setIsSaveConfirmed(true);
+    const id = setTimeout(() => setIsSaveConfirmed(false), 1400);
+    return () => clearTimeout(id);
+  }, [saveFeedbackTick]);
+
   const isShown = isMounted && (isMobile ? (mobileVisible ?? true) : true);
+  const saveLabel = isSaveConfirmed ? "Route saved" : "Save route";
+
+  const getToolbarButtonStyle = (buttonId, stretch = false) => {
+    const pressed = pressedButton === buttonId;
+    const base = iconBtn(pressed, stretch);
+    if (buttonId !== "save_icon") return base;
+    return {
+      ...base,
+      position: "relative",
+      overflow: "visible",
+      border: isSaveConfirmed ? "1px solid rgba(34,197,94,0.42)" : base.border,
+      background: isSaveConfirmed
+        ? (pressed ? "rgba(220,252,231,0.96)" : "linear-gradient(180deg, rgba(240,253,244,0.98) 0%, rgba(220,252,231,0.94) 100%)")
+        : base.background,
+      boxShadow: isSaveConfirmed ? "0 0 0 4px rgba(34,197,94,0.12), 0 10px 24px rgba(22,101,52,0.16)" : "none",
+      transform: pressed ? "scale(0.9)" : isSaveConfirmed ? "scale(1.03)" : "scale(1)",
+    };
+  };
+
+  const getActionButtonStyle = (buttonId) => ({ ...getToolbarButtonStyle(buttonId), flex: 1, width: "auto", height: 40 });
+
+  const renderSaveIcon = () => (
+    isSaveConfirmed ? (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ animation: "panel-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both" }}>
+        <path d="M5.5 12.5L9.5 16.5L18.5 7.5" stroke="#15803d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ) : (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  );
+
+  const renderSavePulse = (isCompact = false) => (
+    isSaveConfirmed ? (
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: isCompact ? -4 : -5,
+          borderRadius: isCompact ? 12 : 14,
+          border: "1px solid rgba(34,197,94,0.35)",
+          animation: "save-ring 0.9s ease-out both",
+          pointerEvents: "none",
+        }}
+      />
+    ) : null
+  );
 
   if (isMobile) {
     return (
@@ -133,12 +192,14 @@ export function RouteToolbar({
             {[
               { key: "undo_icon", onClick: undoLast, label: "Undo", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 8H4V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 8C5.9 5.9 8.6 4.5 11.7 4.5C17.4 4.5 22 9.1 22 14.8C22 16.2 21.7 17.5 21.2 18.7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /></svg> },
               { key: "clear_icon", onClick: clearAll, label: "Clear route", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 7H19" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /><path d="M9 7V5.8C9 5.36 9.36 5 9.8 5H14.2C14.64 5 15 5.36 15 5.8V7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /><path d="M8 7L8.6 18.2C8.63 18.66 9.02 19 9.48 19H14.52C14.98 19 15.37 18.66 15.4 18.2L16 7" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" /></svg> },
-              { key: "save_icon", onClick: saveRoute, label: "Save route", disabled: isRouting, svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+              { key: "save_icon", onClick: saveRoute, label: saveLabel, disabled: isRouting, svg: renderSaveIcon() },
               { key: "export_icon", onClick: exportGPX, label: "Export GPX", svg: <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><polyline points="7 10 12 15 17 10" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><line x1="12" y1="15" x2="12" y2="3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg> },
             ].map(({ key, onClick, label, disabled, svg }) => (
               <button key={key} onClick={onClick} disabled={disabled} aria-label={label}
-                style={{ ...iconBtn(pressedButton === key), flex: 1, width: "auto", height: 40 }}
+                title={label}
+                style={getActionButtonStyle(key)}
                 {...getPressHandlers(key)}>
+                {key === "save_icon" && renderSavePulse(true)}
                 {svg}
               </button>
             ))}
@@ -245,17 +306,14 @@ export function RouteToolbar({
 
         {/* Right: save + export stacked vertically */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button onClick={saveRoute} disabled={isRouting} title="Save route"
-            style={iconBtn(pressedButton === "save_icon")}
+          <button onClick={saveRoute} disabled={isRouting} title={saveLabel} aria-label={saveLabel}
+            style={getToolbarButtonStyle("save_icon")}
             {...getPressHandlers("save_icon")}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {renderSavePulse()}
+            {renderSaveIcon()}
           </button>
           <button onClick={exportGPX} title="Export GPX"
-            style={iconBtn(pressedButton === "export_icon")}
+            style={getToolbarButtonStyle("export_icon")}
             {...getPressHandlers("export_icon")}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />

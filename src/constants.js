@@ -7,16 +7,18 @@ export const THUNDERFOREST_API_KEY = import.meta.env.VITE_THUNDERFOREST_API_KEY 
 
 export const ROUTING_MODES = {
   default: {
-    label: "Default",
+    label: "Gravel",
     profile: "cycling-mountain",
     snapRadius: null,
     preference: "shortest",
     options: { avoid_features: ["steps", "ferries"] },
   },
-  gravel: { label: "Gravel", profile: "cycling-mountain", snapRadius: null },
-  regular: { label: "Balanced", profile: "cycling-regular", snapRadius: null },
   mainRoads: { label: "Main roads", profile: "driving-car", snapRadius: 25 },
 };
+
+export function resolveRoutingMode(mode) {
+  return mode === "mainRoads" ? "mainRoads" : "default";
+}
 
 export const MAP_STYLES = {
   streets: {

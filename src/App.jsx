@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY } from "./constants";
+import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, resolveRoutingMode } from "./constants";
 import { uid } from "./utils/geo";
 import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
@@ -46,6 +46,8 @@ export default function App() {
   const [cloudRoutesError, setCloudRoutesError] = useState(null);
   const [libraryError, setLibraryError] = useState(null);
   const [libraryMessage, setLibraryMessage] = useState(null);
+  const [saveFeedbackTick, setSaveFeedbackTick] = useState(0);
+  const [hasUnseenSavedRoute, setHasUnseenSavedRoute] = useState(false);
   const [isCloudRoutesLoading, setIsCloudRoutesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -78,6 +80,9 @@ export default function App() {
   }, []);
 
   useEffect(() => { if (activeMenuPanel !== "search") setIsSearchDropdownOpen(false); }, [activeMenuPanel]);
+  useEffect(() => {
+    if (activeMenuPanel === "library") setHasUnseenSavedRoute(false);
+  }, [activeMenuPanel]);
 
   useEffect(() => {
     if (!isMapModesFlashOn) return;
@@ -252,13 +257,15 @@ export default function App() {
     const entry = { id: activeRouteId || uid(), name: routeName || "My Route", createdAt: new Date().toISOString(), routingMode, waypoints: waypointsRef.current, routeGeoJson: routeDataRef.current, distanceKm, elevationGainM, elevationLossM };
     setRoutes((prev) => { const exists = prev.find((r) => r.id === entry.id); return exists ? prev.map((r) => r.id === entry.id ? entry : r) : [entry, ...prev]; });
     setActiveRouteId(entry.id);
+    setHasUnseenSavedRoute(activeMenuPanel !== "library");
+    setSaveFeedbackTick((cur) => cur + 1);
   };
 
   const loadRoute = (id) => {
     const r = routes.find((x) => x.id === id);
     if (!r) return;
     setActiveRouteId(r.id); setRouteName(r.name);
-    setRoutingMode(r.routingMode || (r.gravelMode ? "gravel" : "regular"));
+    setRoutingMode(resolveRoutingMode(r.routingMode || (r.gravelMode ? "gravel" : "regular")));
     loadRouteOnMap(r);
   };
 
@@ -561,6 +568,7 @@ export default function App() {
           routingMode={routingMode} setRoutingMode={setRoutingMode}
           getPressHandlers={getPressHandlers}
           pressedButton={pressedButton}
+          saveFeedbackTick={saveFeedbackTick}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
           mobileVisible={!isMobile || activeMenuPanel === "route"}
@@ -584,6 +592,7 @@ export default function App() {
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
         elevationHidden={elevationHidden}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
+        hasUnseenSavedRoute={hasUnseenSavedRoute}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
         isSearchDropdownOpen={isSearchDropdownOpen} setIsSearchDropdownOpen={setIsSearchDropdownOpen}

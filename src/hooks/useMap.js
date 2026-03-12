@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { MAP_STYLES, GPX_ROUTE_COLORS, ROUTING_MODES } from "../constants";
+import { MAP_STYLES, GPX_ROUTE_COLORS, ROUTING_MODES, resolveRoutingMode } from "../constants";
 import { nearestPointOnLine, getWaypointInsertIndex, getFilteredElevations, arePointsClose } from "../utils/geo";
 import { loadAppleMapKit } from "../utils/appleMapKit";
 
@@ -827,7 +827,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         const controller = new AbortController();
         routingAbortRef.current = controller;
 
-        const mode = ROUTING_MODES[routingModeRef.current] || ROUTING_MODES.gravel;
+        const mode = ROUTING_MODES[resolveRoutingMode(routingModeRef.current)];
         let routeWaypoints = waypointsRef.current;
 
         if (routingModeRef.current === "mainRoads") {
