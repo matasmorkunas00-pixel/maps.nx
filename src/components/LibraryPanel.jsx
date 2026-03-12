@@ -40,9 +40,10 @@ export function LibraryPanel({
   newFolderName, setNewFolderName,
   // handlers
   toggleFolderVisibility, toggleFolderOpen, selectAllRoutesInFolder, clearFolderSelection,
-  toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor,
+  toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor, deleteImportedRoutes,
   setBulkMoveTargets, setVisibleFolders, removeFolder, handleCreateFolder,
   loadRoute, deleteRoute,
+  focusedImportedRouteId, focusImportedRoute,
   gpxFileInputRef,
   // styles
   getPressHandlers,
@@ -50,6 +51,8 @@ export function LibraryPanel({
 }) {
   const activeSavedRouteRef = useRef(null);
   const [activeTab, setActiveTab] = useState("files");
+  const [deletingFolder, setDeletingFolder] = useState(null);
+  const [openBulkMenuFolder, setOpenBulkMenuFolder] = useState(null);
 
   const sortedRoutes = useMemo(() => {
     const sorted = [...routes];
@@ -69,6 +72,26 @@ export function LibraryPanel({
     }
     return sorted;
   }, [routes, savedRoutesSort]);
+
+  const sortedImportedRoutes = useMemo(() => {
+    const sorted = [...importedRoutes];
+    const dateVal = (r) => { const v = Date.parse(r?.importedAt || ""); return Number.isFinite(v) ? v : 0; };
+    switch (savedRoutesSort) {
+      case "oldest":
+        sorted.sort((a, b) => dateVal(a) - dateVal(b));
+        break;
+      case "distance":
+        sorted.sort((a, b) => getRouteNumberValue(b.distanceKm) - getRouteNumberValue(a.distanceKm) || dateVal(b) - dateVal(a));
+        break;
+      case "elevation":
+        sorted.sort((a, b) => getRouteNumberValue(b.elevationGainM) - getRouteNumberValue(a.elevationGainM) || dateVal(b) - dateVal(a));
+        break;
+      default:
+        sorted.sort((a, b) => dateVal(b) - dateVal(a));
+        break;
+    }
+    return sorted;
+  }, [importedRoutes, savedRoutesSort]);
 
   useEffect(() => {
     if (!savedRouteRevealTick) return;
@@ -128,7 +151,7 @@ export function LibraryPanel({
 
       {/* Tabs */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, background: "rgba(241,245,249,0.9)", borderRadius: 12, padding: 4 }}>
-        {[{ id: "files", label: "Files", count: importedRoutes.length }, { id: "routes", label: "Routes", count: routes.length }].map(({ id, label, count }) => (
+        {[{ id: "files", label: "Files", count: importedRoutes.length }, { id: "routes", label: "Routes", count: routes.length + importedRoutes.length }].map(({ id, label, count }) => (
           <button key={id} onClick={() => setActiveTab(id)}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 10px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "background 0.15s, box-shadow 0.15s, color 0.15s", WebkitTapHighlightColor: "transparent",
               background: activeTab === id ? "#fff" : "transparent",
@@ -151,7 +174,6 @@ export function LibraryPanel({
             <button style={getLibraryButtonStyle("create_folder", "secondary")} onClick={handleCreateFolder} disabled={isCloudRoutesLoading} {...getPressHandlers("create_folder")}>Create</button>
           </div>
 
-          {libraryMessage && <div style={{ fontSize: 12, color: "#166534", background: "rgba(240,253,244,0.96)", border: "1px solid rgba(187,247,208,0.95)", borderRadius: 10, padding: "8px 10px" }}>{libraryMessage}</div>}
           {libraryError && <div style={{ fontSize: 12, color: "#991b1b", background: "rgba(254,242,242,0.96)", border: "1px solid rgba(254,202,202,0.95)", borderRadius: 10, padding: "8px 10px" }}>{libraryError}</div>}
 
           {availableFolders.length === 0 ? (
@@ -160,6 +182,7 @@ export function LibraryPanel({
             <div style={{ display: "grid", gap: 2 }}>
               {availableFolders.map((folder) => {
                 const folderRoutes = importedRoutes.filter((r) => r.folder === folder);
+                if (!folderRoutes.length) return null;
                 const checked = activeVisibleFolders.includes(folder);
                 const isOpen = openFolders.includes(folder);
                 const selectedRouteIds = Array.isArray(selectedRouteIdsByFolder?.[folder]) ? selectedRouteIdsByFolder[folder] : [];
@@ -172,23 +195,59 @@ export function LibraryPanel({
                   <div key={folder} style={{ borderTop: "1px solid rgba(226,232,240,0.7)" }}>
                     {/* Folder row */}
                     <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", alignItems: "center", gap: 8, padding: "8px 0" }}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleFolderVisibility(folder)} onClick={(e) => e.stopPropagation()} />
-                      <button type="button" onClick={() => toggleFolderOpen(folder)} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
-                          <path d="M9 6L15 12L9 18" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                      {/* Eye toggle */}
+                      <button type="button" onClick={() => toggleFolderVisibility(folder)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: checked ? "#3b82f6" : "#cbd5e1", padding: "2px", lineHeight: 0, transition: "color 0.15s", flexShrink: 0 }}
+                        title={checked ? "Hide from map" : "Show on map"}>
+                        {checked ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                          </svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
+                          </svg>
+                        )}
+                      </button>
+                      <button type="button" onClick={() => toggleFolderOpen(folder)} style={{ display: "flex", alignItems: "center", minWidth: 0, background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: "#18212f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder}</span>
                       </button>
                       <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{folderRoutes.length}</span>
-                      {folder !== "Imported" && (
-                        <button type="button" onClick={() => removeFolder(folder)} disabled={isCloudRoutesLoading}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 13, padding: "2px 4px", lineHeight: 1, transition: "color 0.15s" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "#cbd5e1"; }}>
-                          ✕
-                        </button>
-                      )}
+                      {/* Bin icon */}
+                      <button type="button" onClick={() => setDeletingFolder(folder)} disabled={isCloudRoutesLoading}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", padding: "2px", lineHeight: 0, transition: "color 0.15s", flexShrink: 0 }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "#cbd5e1"; }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                        </svg>
+                      </button>
                     </div>
+                    {/* Delete confirmation */}
+                    {deletingFolder === folder && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0 8px", flexWrap: "wrap" }}>
+                        <button onClick={() => { removeFolder(folder); setDeletingFolder(null); }}
+                          style={{ fontSize: 12, fontWeight: 600, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#1d4ed8"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "#3b82f6"; }}>
+                          Delete folder
+                        </button>
+                        <span style={{ color: "#e2e8f0", fontSize: 12 }}>·</span>
+                        <button onClick={() => { deleteImportedRoutes(folderRoutes.map((r) => r.id)); setDeletingFolder(null); }}
+                          style={{ fontSize: 12, fontWeight: 600, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#b91c1c"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "#ef4444"; }}>
+                          Delete folder and files
+                        </button>
+                        <span style={{ color: "#e2e8f0", fontSize: 12 }}>·</span>
+                        <button onClick={() => setDeletingFolder(null)}
+                          style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#64748b"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
 
                     {/* Expanded routes */}
                     {isOpen && (
@@ -197,17 +256,46 @@ export function LibraryPanel({
                           <div style={{ fontSize: 12, color: "#94a3b8", padding: "4px 0" }}>Empty folder.</div>
                         ) : (
                           <>
-                            {selectedCount > 0 && moveTargets.length > 0 && (
-                              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 6, padding: "6px 0 4px" }}>
-                                <select value={bulkMoveTarget} onChange={(e) => setBulkMoveTargets((cur) => ({ ...cur, [folder]: e.target.value }))}
-                                  style={{ ...libraryInputStyle, padding: "5px 8px", fontSize: 12 }}>
-                                  {moveTargets.map((fo) => <option key={fo} value={fo}>{fo}</option>)}
-                                </select>
-                                <button style={getLibraryButtonStyle(`folder_move_${folder}`, "secondary")} onClick={() => moveImportedRoutesToFolder(selectedRouteIds, bulkMoveTarget)} {...getPressHandlers(`folder_move_${folder}`)}>
-                                  Move {selectedCount}
-                                </button>
-                              </div>
-                            )}
+                            {/* Folder action bar */}
+                            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "5px 0 3px" }}>
+                              <button onClick={() => allSelected ? clearFolderSelection(folder) : selectAllRoutesInFolder(folder)}
+                                style={{ fontSize: 12, fontWeight: 600, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: "3px 0", transition: "color 0.15s" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "#18212f"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = "#64748b"; }}>
+                                {allSelected ? "Deselect all" : "Select all"}
+                              </button>
+                              <button onClick={() => setOpenBulkMenuFolder(openBulkMenuFolder === folder ? null : folder)}
+                                style={{ fontSize: 16, fontWeight: 700, color: openBulkMenuFolder === folder ? "#18212f" : "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, letterSpacing: 1, transition: "color 0.15s", visibility: selectedCount > 0 ? "visible" : "hidden" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = "#18212f"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = openBulkMenuFolder === folder ? "#18212f" : "#94a3b8"; }}>
+                                ···
+                              </button>
+                              {selectedCount > 0 && openBulkMenuFolder === folder && (
+                                <div style={{ position: "absolute", top: "100%", right: 0, background: "#fff", border: "1px solid rgba(226,232,240,0.95)", borderRadius: 12, boxShadow: "0 4px 16px rgba(15,23,42,0.1)", padding: "8px 12px", zIndex: 20, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 180 }}>
+                                  {moveTargets.length > 0 && (
+                                    <>
+                                      <select value={bulkMoveTarget} onChange={(e) => setBulkMoveTargets((cur) => ({ ...cur, [folder]: e.target.value }))}
+                                        style={{ ...libraryInputStyle, padding: "3px 6px", fontSize: 12, height: "auto" }}>
+                                        {moveTargets.map((fo) => <option key={fo} value={fo}>{fo}</option>)}
+                                      </select>
+                                      <button onClick={() => { moveImportedRoutesToFolder(selectedRouteIds, bulkMoveTarget); setOpenBulkMenuFolder(null); }}
+                                        style={{ fontSize: 12, fontWeight: 600, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = "#1d4ed8"; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = "#3b82f6"; }}>
+                                        Move {selectedCount}
+                                      </button>
+                                      <span style={{ color: "#e2e8f0", fontSize: 12 }}>·</span>
+                                    </>
+                                  )}
+                                  <button onClick={() => { deleteImportedRoutes(selectedRouteIds); setOpenBulkMenuFolder(null); }}
+                                    style={{ fontSize: 12, fontWeight: 600, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#b91c1c"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "#ef4444"; }}>
+                                    Delete {selectedCount}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                             {folderRoutes.map((route) => (
                               <div key={route.id} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 7, alignItems: "center", padding: "5px 0", borderTop: "1px solid rgba(226,232,240,0.6)" }}>
                                 <input type="checkbox" checked={selectedRouteIds.includes(route.id)} onChange={() => toggleRouteSelection(folder, route.id)} />
@@ -234,8 +322,8 @@ export function LibraryPanel({
       {activeTab === "routes" && (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{routes.length} {routes.length === 1 ? "route" : "routes"}</span>
-            {routes.length > 1 && (
+            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{routes.length + importedRoutes.length} {routes.length + importedRoutes.length === 1 ? "route" : "routes"}</span>
+            {(routes.length + importedRoutes.length) > 1 && (
               <select value={savedRoutesSort} onChange={(e) => setSavedRoutesSort(e.target.value)}
                 style={{ ...libraryInputStyle, padding: "5px 8px", fontSize: 12, cursor: "pointer" }}>
                 {SAVED_ROUTE_SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -243,8 +331,8 @@ export function LibraryPanel({
             )}
           </div>
 
-          {sortedRoutes.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>No saved routes yet.</div>
+          {routes.length === 0 && importedRoutes.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>No routes yet.</div>
           ) : (
             <div style={{ display: "grid", gap: 2 }}>
               {sortedRoutes.map((r) => (
@@ -252,17 +340,44 @@ export function LibraryPanel({
                   style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid rgba(226,232,240,0.7)" }}>
                   <button onClick={() => loadRoute(r.id)} style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
                     <div style={{ fontSize: 13, fontWeight: r.id === activeRouteId ? 700 : 600, color: r.id === activeRouteId ? "#2563eb" : "#18212f" }}>{r.name}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4, marginTop: 1 }}>{r.distanceKm} km · {r.elevationGainM} m · {formatSavedRouteDate(r.createdAt)}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4, marginTop: 1 }}>{r.distanceKm} km ↑{r.elevationGainM} m · {formatSavedRouteDate(r.createdAt)}</div>
                   </button>
-                  <button style={getLibraryButtonStyle(`delete_${r.id}`, "danger")} onClick={() => deleteRoute(r.id)} title="Delete" {...getPressHandlers(`delete_${r.id}`)}>
-                    Delete
+                  <button onClick={() => deleteRoute(r.id)} title="Delete"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", padding: "2px", lineHeight: 0, transition: "color 0.15s", flexShrink: 0 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "#cbd5e1"; }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                    </svg>
                   </button>
                 </div>
               ))}
+              {sortedImportedRoutes.map((route) => {
+                const isFocused = focusedImportedRouteId === route.id;
+                return (
+                  <div key={route.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", borderTop: "1px solid rgba(226,232,240,0.7)" }}>
+                    <button onClick={() => focusImportedRoute(route.id)}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", minWidth: 0 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: route.color || GPX_ROUTE_COLORS[0], flexShrink: 0, boxShadow: isFocused ? `0 0 0 2px ${route.color || GPX_ROUTE_COLORS[0]}40` : "none", transition: "box-shadow 0.15s" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: isFocused ? 700 : 600, color: isFocused ? "#2563eb" : "#18212f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", transition: "color 0.15s" }}>{route.name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4, marginTop: 1 }}>{route.distanceKm} km ↑{route.elevationGainM} m</div>
+                      </div>
+                    </button>
+                    <button onClick={() => deleteImportedRoutes([route.id])}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 13, padding: "4px 6px", lineHeight: 1, transition: "color 0.15s", flexShrink: 0 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "#cbd5e1"; }}>
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       )}
+
     </div>
   );
 }

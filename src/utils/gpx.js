@@ -58,8 +58,24 @@ export function parseGpxText(gpxText) {
     xml.querySelector("rte > name")?.textContent?.trim() ||
     "Imported GPX";
 
+  // Extract activity date: prefer metadata/time, fall back to first trkpt time
+  let activityDate = null;
+  const metaTime = xml.querySelector("metadata > time")?.textContent?.trim();
+  if (metaTime) {
+    const d = new Date(metaTime);
+    if (!Number.isNaN(d.getTime())) activityDate = d;
+  }
+  if (!activityDate) {
+    const trkptTime = xml.querySelector("trkpt > time")?.textContent?.trim();
+    if (trkptTime) {
+      const d = new Date(trkptTime);
+      if (!Number.isNaN(d.getTime())) activityDate = d;
+    }
+  }
+
   return {
     name,
+    activityDate,
     featureCollection: {
       type: "FeatureCollection",
       features: featureCoords.map((coords, index) => ({

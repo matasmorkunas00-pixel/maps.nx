@@ -208,6 +208,21 @@ export async function updateCloudImportedRoutesFolder(routeIds, folder) {
   if (error) throw error;
 }
 
+export async function deleteCloudImportedRoutes(routes) {
+  const client = ensureSupabase();
+  const ids = routes.map((r) => r.id).filter(Boolean);
+  const storagePaths = routes.map((r) => r.storagePath).filter(Boolean);
+
+  if (!ids.length) return;
+
+  const { error } = await client.from(GPX_ROUTES_TABLE).delete().in("id", ids);
+  if (error) throw error;
+
+  if (storagePaths.length) {
+    await client.storage.from(GPX_FILES_BUCKET).remove(storagePaths);
+  }
+}
+
 export async function deleteCloudFolder({ userId, name, allowMissingTable = false }) {
   const client = ensureSupabase();
   const folderName = normalizeFolderName(name);
