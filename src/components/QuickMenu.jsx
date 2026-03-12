@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MENU_ICON_SIZE } from "../styles/appStyles";
 import { SearchPanel } from "./SearchPanel";
@@ -33,6 +33,7 @@ export function QuickMenu({
   styleControlsRef,
 }) {
   const mapStyleBtnRef = useRef(null);
+  const libraryPanelAreaRef = useRef(null);
   const [popupEl, setPopupEl] = useState(null);
   const [popupPos, setPopupPos] = useState({ top: -9999, left: -9999, visible: false });
 
@@ -50,6 +51,15 @@ export function QuickMenu({
       visible: true,
     });
   }, [isStyleMenuOpen, popupEl]);
+
+  useEffect(() => {
+    if (isMobile || activeMenuPanel !== "library") return;
+    const handlePointerDown = (event) => {
+      if (!libraryPanelAreaRef.current?.contains(event.target)) toggleMenuPanel("library");
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [activeMenuPanel, isMobile, toggleMenuPanel]);
 
   const topPos = !isMobile && isGraphExpanded
     ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
@@ -201,7 +211,7 @@ export function QuickMenu({
       </div>
 
       {/* Library */}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: MENU_ICON_SIZE }}>
+      <div ref={libraryPanelAreaRef} style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: MENU_ICON_SIZE }}>
         <button
           onClick={() => toggleMenuPanel("library")}
           onMouseUp={(e) => e.currentTarget.blur()}
