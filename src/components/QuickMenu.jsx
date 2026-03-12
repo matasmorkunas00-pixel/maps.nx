@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MENU_ICON_SIZE } from "../styles/appStyles";
 import { SearchPanel } from "./SearchPanel";
@@ -33,7 +33,6 @@ export function QuickMenu({
   styleControlsRef,
 }) {
   const mapStyleBtnRef = useRef(null);
-  const libraryPanelAreaRef = useRef(null);
   const [popupEl, setPopupEl] = useState(null);
   const [popupPos, setPopupPos] = useState({ top: -9999, left: -9999, visible: false });
 
@@ -51,15 +50,6 @@ export function QuickMenu({
       visible: true,
     });
   }, [isStyleMenuOpen, popupEl]);
-
-  useEffect(() => {
-    if (isMobile || activeMenuPanel !== "library") return;
-    const handlePointerDown = (event) => {
-      if (!libraryPanelAreaRef.current?.contains(event.target)) toggleMenuPanel("library");
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [activeMenuPanel, isMobile, toggleMenuPanel]);
 
   const topPos = !isMobile && isGraphExpanded
     ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
@@ -149,6 +139,22 @@ export function QuickMenu({
         transition: "top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
+      {activeMenuPanel === "library" && !isMobile && (
+        <div
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleMenuPanel("library");
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 20,
+            background: "transparent",
+          }}
+        />
+      )}
+
       {/* Search */}
       <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}>
         <button onClick={() => toggleMenuPanel("search")} style={getMenuIconButtonStyle("search")} aria-label="Search places">
@@ -211,7 +217,7 @@ export function QuickMenu({
       </div>
 
       {/* Library */}
-      <div ref={libraryPanelAreaRef} style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: MENU_ICON_SIZE }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: MENU_ICON_SIZE, zIndex: activeMenuPanel === "library" && !isMobile ? 21 : "auto" }}>
         <button
           onClick={() => toggleMenuPanel("library")}
           onMouseUp={(e) => e.currentTarget.blur()}
