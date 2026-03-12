@@ -8,7 +8,7 @@ import { normalizeFolderName, appendFolderName, loadStoredFolderNames } from "./
 import { fetchSearchResults } from "./utils/search";
 import { useMap } from "./hooks/useMap";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
-import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRoutesFolder, deleteCloudFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
+import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRoutesFolder, deleteCloudImportedRoutes, deleteCloudFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
 import { createStyleHelpers } from "./styles/appStyles";
 import { RouteToolbar } from "./components/RouteToolbar";
 import { ElevationSheet } from "./components/ElevationSheet";
@@ -78,6 +78,18 @@ export default function App() {
   }, []);
 
   useEffect(() => { if (activeMenuPanel !== "search") setIsSearchDropdownOpen(false); }, [activeMenuPanel]);
+
+  useEffect(() => {
+    if (activeMenuPanel !== "library" || isMobile) return;
+    const handleClick = (e) => {
+      if (!quickMenuRef.current?.contains(e.target)) {
+        e.stopPropagation();
+        setActiveMenuPanel(null);
+      }
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [activeMenuPanel, isMobile]);
 
   useEffect(() => {
     if (!isMapModesFlashOn) return;
@@ -187,7 +199,22 @@ export default function App() {
     });
   }, [availableFolders]);
 
-  const importedRoutesGeoJson = useMemo(() => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders), [importedRoutes, activeVisibleFolders]);
+  const [focusedImportedRouteId, setFocusedImportedRouteId] = useState(null);
+
+  const focusImportedRoute = useCallback((routeId) => {
+    setFocusedImportedRouteId((cur) => cur === routeId ? null : routeId);
+    if (routeId) {
+      const route = importedRoutes.find((r) => r.id === routeId);
+      if (route?.folder) {
+        setVisibleFolders((cur) => {
+          if (cur === null) return null;
+          return cur.includes(route.folder) ? cur : [...cur, route.folder];
+        });
+      }
+    }
+  }, [importedRoutes]);
+
+  const importedRoutesGeoJson = useMemo(() => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders, focusedImportedRouteId), [importedRoutes, activeVisibleFolders, focusedImportedRouteId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !isSupabaseAuthReady) return;
@@ -295,7 +322,11 @@ export default function App() {
 
   const toggleFolderOpen = (folder) => {
     const f = normalizeFolderName(folder);
-    setOpenFolders((cur) => cur.includes(f) ? cur.filter((e) => e !== f) : [...cur, f]);
+    const isClosing = openFolders.includes(f);
+    setOpenFolders((cur) => isClosing ? cur.filter((e) => e !== f) : [...cur, f]);
+    if (isClosing) {
+      setSelectedRouteIdsByFolder((cur) => { if (!cur?.[f]?.length) return cur; const next = { ...cur }; delete next[f]; return next; });
+    }
   };
 
   const clearFolderSelection = (folder) => {
@@ -354,29 +385,64 @@ export default function App() {
 
   const handleGpxUpload = async (event) => {
     const files = Array.from(event.target.files || []);
-    const folder = "Imported";
     if (!files.length) { event.target.value = ""; return; }
     setLibraryError(null); setLibraryMessage(null);
+
+    const currentYear = String(new Date().getFullYear());
+    const getFolderForParsed = (parsed) => {
+      if (parsed?.activityDate instanceof Date) return String(parsed.activityDate.getFullYear());
+      return currentYear;
+    };
+
+    const BATCH_SIZE = 5;
+
     if (isCloudLibraryActive && supabaseUser) {
       setIsCloudRoutesLoading(true); setCloudRoutesError(null);
       try {
-        await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
-        const uploaded = (await Promise.all(files.map((file, i) => uploadCloudImportedRoute({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i), index: i })))).filter(Boolean);
-        if (uploaded.length) { setCloudFolders((cur) => appendFolderName(cur, folder)); setCloudImportedRoutes((cur) => [...uploaded, ...cur]); addFolderToVisibleList(folder); openFolder(folder); }
+        const createdFolders = new Set();
+        for (let i = 0; i < files.length; i += BATCH_SIZE) {
+          const batch = files.slice(i, i + BATCH_SIZE);
+          const uploaded = (await Promise.all(batch.map(async (file, batchIdx) => {
+            try {
+              const text = await file.text();
+              const parsed = parseGpxText(text);
+              const folder = getFolderForParsed(parsed);
+              if (!createdFolders.has(folder)) {
+                await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
+                createdFolders.add(folder);
+              }
+              return await uploadCloudImportedRoute({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx });
+            } catch { return null; }
+          }))).filter(Boolean);
+          if (uploaded.length) {
+            const folders = [...new Set(uploaded.map((r) => r.folder))];
+            setCloudFolders((cur) => folders.reduce((acc, f) => appendFolderName(acc, f), cur));
+            setCloudImportedRoutes((cur) => [...uploaded, ...cur]);
+            folders.forEach((f) => { addFolderToVisibleList(f); });
+          }
+        }
       } catch (error) { setLibraryError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`); }
       finally { setIsCloudRoutesLoading(false); event.target.value = ""; }
       return;
     }
-    const parsed = (await Promise.all(files.map(async (file, i) => {
-      const text = await file.text();
-      const p = parseGpxText(text);
-      if (!p) return null;
-      return { id: uid(), folder, name: p.name || file.name.replace(/\.gpx$/i, ""), fileName: file.name, importedAt: new Date().toISOString(), color: getDefaultRouteColor(i), geoJson: p.featureCollection };
-    }))).filter(Boolean);
+
+    const parsed = [];
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(async (file, batchIdx) => {
+        const text = await file.text();
+        const p = parseGpxText(text);
+        if (!p) return null;
+        return normalizeImportedRoute({ id: uid(), folder: getFolderForParsed(p), name: p.name || file.name.replace(/\.gpx$/i, ""), fileName: file.name, importedAt: new Date().toISOString(), color: getDefaultRouteColor(i + batchIdx), geoJson: p.featureCollection }, i + batchIdx);
+      }));
+      parsed.push(...results.filter(Boolean));
+    }
+
     if (!parsed.length) { setLibraryError("None of the selected files were valid GPX files."); event.target.value = ""; return; }
-    setGuestFolders((cur) => appendFolderName(cur, folder));
+    const folders = [...new Set(parsed.map((r) => r.folder))];
+    setGuestFolders((cur) => folders.reduce((acc, f) => appendFolderName(acc, f), cur));
     setGuestImportedRoutes((cur) => [...parsed, ...cur]);
-    addFolderToVisibleList(folder); openFolder(folder);
+    folders.forEach((f) => { addFolderToVisibleList(f); });
     event.target.value = "";
   };
 
@@ -435,6 +501,38 @@ export default function App() {
       return next;
     });
     return true;
+  };
+
+  const deleteImportedRoutes = async (routeIds) => {
+    const ids = Array.isArray(routeIds) ? routeIds.filter(Boolean) : [];
+    if (!ids.length) return;
+    const toDelete = importedRoutes.filter((r) => ids.includes(r.id));
+    if (!toDelete.length) return;
+    setLibraryError(null);
+    if (isCloudLibraryActive && supabaseUser) {
+      const prev = cloudImportedRoutes;
+      setCloudImportedRoutes((cur) => cur.filter((r) => !ids.includes(r.id)));
+      try {
+        await deleteCloudImportedRoutes(toDelete);
+      } catch (error) {
+        setCloudImportedRoutes(prev);
+        setLibraryError(`Failed to delete: ${error?.message || "Unknown error"}`);
+        return;
+      }
+    } else {
+      setGuestImportedRoutes((cur) => cur.filter((r) => !ids.includes(r.id)));
+    }
+    setSelectedRouteIdsByFolder((cur) => {
+      const next = { ...cur };
+      for (const r of toDelete) {
+        if (next[r.folder]) {
+          next[r.folder] = next[r.folder].filter((id) => !ids.includes(id));
+          if (!next[r.folder].length) delete next[r.folder];
+        }
+      }
+      return next;
+    });
+    setFocusedImportedRouteId((cur) => (ids.includes(cur) ? null : cur));
   };
 
   const removeFolder = async (folder) => {
@@ -540,9 +638,10 @@ export default function App() {
     savedRoutesSort, setSavedRoutesSort,
     newFolderName, setNewFolderName,
     toggleFolderVisibility, toggleFolderOpen, selectAllRoutesInFolder, clearFolderSelection,
-    toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor,
+    toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor, deleteImportedRoutes,
     setBulkMoveTargets, setVisibleFolders, removeFolder, handleCreateFolder,
     loadRoute, deleteRoute,
+    focusedImportedRouteId, focusImportedRoute,
     gpxFileInputRef,
     getPressHandlers, pressedButton,
     librarySectionStyle, getLibraryBadgeStyle, getLibraryButtonStyle, libraryInputStyle,
@@ -584,13 +683,6 @@ export default function App() {
         />
       )}
 
-      {activeMenuPanel === "library" && !isMobile && (
-        <div
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); toggleMenuPanel("library"); }}
-          style={{ position: "fixed", inset: 0, zIndex: 4, background: "transparent" }}
-        />
-      )}
 
       {isStyleMenuOpen && (
         <div
@@ -622,7 +714,7 @@ export default function App() {
         isStyleMenuOpen={isStyleMenuOpen} setIsStyleMenuOpen={setIsStyleMenuOpen}
         isMapModesFlashOn={isMapModesFlashOn} setIsMapModesFlashOn={setIsMapModesFlashOn}
         isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
-        onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
+        onStyleMenuOpen={() => setActiveMenuPanel(null)}
         styleControlsRef={styleControlsRef}
       />
 

@@ -39,7 +39,7 @@ const ROUTE_HOVER_POINT_PAINT = {
 const IMPORTED_PAINT = {
   "line-color": ["coalesce", ["get", "color"], GPX_ROUTE_COLORS[0]],
   "line-width": 2.5,
-  "line-opacity": 0.72,
+  "line-opacity": ["coalesce", ["get", "opacity"], 0.72],
 };
 
 function ensureSource(map, id, data) {
