@@ -6,6 +6,7 @@ export function QuickMenu({
   quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
+  isGraphExpanded, bottomSheetHeight, showRoutingUi, waypointsCount, elevationHidden,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -16,18 +17,37 @@ export function QuickMenu({
   getMenuIconButtonStyle, expandedMenuFloatingStyle, libraryPanelFloatingStyle,
   inputStyle,
 }) {
+  // On mobile: sit just above the style picker buttons (2×44px + 10px gap = 98px) + 12px gap
+  // Style picker bottom matches MapStylePicker: bottomPos + env(safe-area-inset-bottom)
+  const stylePickerBottom = isMobile && showRoutingUi && waypointsCount > 0
+    ? `calc(${bottomSheetHeight} + 4px + env(safe-area-inset-bottom, 0px))`
+    : `calc(4px + env(safe-area-inset-bottom, 0px))`;
+  // When elevation sheet is visible, push menu above it (sheet height + 10px gap matches icon gap)
+  const elevationSheetVisible = isMobile && showRoutingUi && waypointsCount > 0 && !elevationHidden;
+  const mobileBottom = isMobile
+    ? elevationSheetVisible
+      ? `calc(clamp(171px, 19vh, 225px) + 20px + env(safe-area-inset-bottom, 0px) + 108px)`
+      : `calc(${stylePickerBottom} + 108px)`
+    : undefined;
+  const topPos = !isMobile && isGraphExpanded
+    ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
+    : "50%";
+
   return (
     <div
       ref={quickMenuRef}
       style={{
         position: "absolute",
-        top: "50%",
-        left: 10,
-        transform: "translateY(-50%)",
+        ...(isMobile
+          ? { bottom: mobileBottom, top: "auto", transform: "none" }
+          : { top: topPos, transform: "translateY(-50%)" }
+        ),
+        left: "calc(14px + env(safe-area-inset-left, 0px))",
         zIndex: 5,
         display: "grid",
         gap: 10,
         alignItems: "start",
+        transition: "bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), top 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Search */}
@@ -38,10 +58,10 @@ export function QuickMenu({
             <path d="M16.5 16.5L21 21" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
-        {activeMenuPanel === "search" && (
+        {activeMenuPanel === "search" && !isMobile && (
           <div style={{
             ...expandedMenuFloatingStyle,
-            width: isMobile ? "calc(100vw - 74px)" : 300,
+            width: 300,
           }}>
             <SearchPanel
               searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -113,7 +133,7 @@ export function QuickMenu({
             <path d="M3.5 7.5C3.5 6.4 4.4 5.5 5.5 5.5H10L12 7.5H18.5C19.6 7.5 20.5 8.4 20.5 9.5V16.5C20.5 17.6 19.6 18.5 18.5 18.5H5.5C4.4 18.5 3.5 17.6 3.5 16.5V7.5Z" stroke="#24364b" strokeWidth="1.7" />
           </svg>
         </button>
-        {activeMenuPanel === "library" && (
+        {activeMenuPanel === "library" && !isMobile && (
           <div style={{ ...libraryPanelFloatingStyle, overflowY: "auto" }}>
             <LibraryPanel {...libraryProps} />
           </div>

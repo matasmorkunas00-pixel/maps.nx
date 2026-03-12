@@ -6,6 +6,7 @@ export function SearchPanel({
   getSearchResultLabels,
   searchBoxRef,
   inputStyle,
+  autoFocus,
 }) {
   return (
     <div ref={searchBoxRef} style={{ position: "relative" }}>
@@ -14,7 +15,8 @@ export function SearchPanel({
         onChange={(e) => setSearchQuery(e.target.value)}
         onFocus={() => { if (searchResults.length || searchQuery.trim().length >= 3) setIsSearchDropdownOpen(true); }}
         onKeyDown={handleSearchKeyDown}
-        placeholder="Search address, shops, tourist places..."
+        placeholder="Search"
+        autoFocus={autoFocus}
         style={{ ...inputStyle, width: "100%", padding: "11px 40px 11px 12px", boxSizing: "border-box" }}
       />
       <div aria-hidden="true" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#506176", pointerEvents: "none" }}>

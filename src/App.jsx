@@ -15,6 +15,8 @@ import { ElevationSheet } from "./components/ElevationSheet";
 import { MapStylePicker } from "./components/MapStylePicker";
 import { PendingPinDialog } from "./components/PendingPinDialog";
 import { QuickMenu } from "./components/QuickMenu";
+import { SearchPanel } from "./components/SearchPanel";
+import { LibraryPanel } from "./components/LibraryPanel";
 
 export default function App() {
   const appleMapContainerRef = useRef(null);
@@ -54,6 +56,9 @@ export default function App() {
   const [pendingPin, setPendingPin] = useState(null);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
   const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
+  const [elevationHidden, setElevationHidden] = useState(false);
+  const [panelAnimatingOut, setPanelAnimatingOut] = useState(null);
+  const panelAnimOutTimer = useRef(null);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -216,11 +221,11 @@ export default function App() {
 
   const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
-    onFirstClick: (lngLat) => setPendingPin(lngLat),
+    onFirstClick: (lngLat) => { setPendingPin(lngLat); setActiveMenuPanel(null); setIsStyleMenuOpen(false); },
   });
 
   const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
-  const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : 68;
+  const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : "68px";
 
   const handleElevationHoverCoordinateChange = useCallback((coordinates) => {
     if (Array.isArray(coordinates) && coordinates.length >= 2) {
@@ -233,6 +238,7 @@ export default function App() {
   // --- Handlers ---
 
   const handleLocationNo = () => { if (!pendingPin) return; addWaypoint(pendingPin.lng, pendingPin.lat); setPendingPin(null); };
+  const handleLocationCancel = () => setPendingPin(null);
   const handleLocationYes = async () => {
     if (!pendingPin) return;
     try {
@@ -470,11 +476,18 @@ export default function App() {
     return { primary, secondary };
   };
 
+  const closeMobilePanel = useCallback((panelKey) => {
+    setPanelAnimatingOut(panelKey);
+    clearTimeout(panelAnimOutTimer.current);
+    panelAnimOutTimer.current = setTimeout(() => setPanelAnimatingOut(null), 280);
+  }, []);
+
   const handleSearchSelect = async (feature) => {
     if (!Array.isArray(feature?.center) || feature.center.length < 2) return;
     const label = feature?.place_name || feature?.text || "";
     skipNextSearchRef.current = true;
     setSearchQuery(label); setIsSearchDropdownOpen(false); setSearchError(null);
+    if (isMobile) { closeMobilePanel("search"); setActiveMenuPanel(null); }
     const result = await routeToDestination(feature.center);
     if (!result?.ok) setSearchError(result?.message || "Could not route to that place.");
   };
@@ -487,7 +500,17 @@ export default function App() {
   };
 
   const toggleMenuPanel = (panelKey) => {
-    setActiveMenuPanel((cur) => cur === panelKey ? null : panelKey);
+    const opening = activeMenuPanel !== panelKey;
+    if (isMobile) {
+      if (!opening) {
+        closeMobilePanel(panelKey);
+      } else if (activeMenuPanel) {
+        closeMobilePanel(activeMenuPanel);
+      }
+    }
+    setActiveMenuPanel(opening ? panelKey : null);
+    setIsStyleMenuOpen(false);
+    if (isMobile && opening && panelKey === "library") setIsGraphExpanded(false);
   };
 
   const getPressHandlers = (buttonId) => ({
@@ -528,7 +551,7 @@ export default function App() {
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
-      {showRoutingUi && (
+      {showRoutingUi && !(isMobile && (activeMenuPanel === "search" || activeMenuPanel === "library")) && (
         <RouteToolbar
           undoLast={undoLast} clearAll={clearAll}
           distanceKm={distanceKm} elevationGainM={elevationGainM}
@@ -541,21 +564,26 @@ export default function App() {
           pressedButton={pressedButton}
           waypointsCount={waypointsRef.current.length}
           bottomSheetHeight={bottomSheetHeight}
+          mobileVisible={!isMobile || activeMenuPanel === "route"}
         />
       )}
 
-      {showRoutingUi && waypointsRef.current.length > 0 && (
+      {showRoutingUi && waypointsRef.current.length > 0 && !(isMobile && activeMenuPanel === "library") && (
         <ElevationSheet
           routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} distanceKm={distanceKm}
-          isMobile={isMobile} bottomSheetHeight={bottomSheetHeight}
-          isGraphExpanded={isGraphExpanded} setIsGraphExpanded={setIsGraphExpanded}
+          isMobile={isMobile}
           onHoverCoordinateChange={handleElevationHoverCoordinateChange}
+          hasCyclingButton={!isMobile && mapStyle === "outdoor"}
+          hidden={elevationHidden} setHidden={setElevationHidden}
         />
       )}
 
       <QuickMenu
         quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
+        isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
+        showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
+        elevationHidden={elevationHidden}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
@@ -569,6 +597,68 @@ export default function App() {
         inputStyle={inputStyle}
       />
 
+      {isMobile && (activeMenuPanel === "library" || panelAnimatingOut === "library") && (
+        <>
+          <div
+            onClick={() => activeMenuPanel === "library" && toggleMenuPanel("library")}
+            style={{
+              position: "fixed", inset: 0, zIndex: 9,
+              background: "rgba(15, 23, 42, 0.4)",
+              backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+              animation: `${panelAnimatingOut === "library" ? "overlay-fade-out" : "overlay-fade-in"} 0.26s ease both`,
+              pointerEvents: panelAnimatingOut === "library" ? "none" : "auto",
+            }}
+          />
+          <div style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0, right: 0,
+            maxHeight: "min(85dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 48px))",
+            overflowY: "auto",
+            zIndex: 10,
+            borderRadius: "20px 20px 0 0",
+            padding: "12px 14px calc(24px + env(safe-area-inset-bottom, 0px))",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,249,252,0.96) 100%)",
+            boxShadow: "0 -8px 32px rgba(15, 23, 42, 0.18), 0 -2px 8px rgba(15, 23, 42, 0.08)",
+            animation: `${panelAnimatingOut === "library" ? "slide-down-out" : "slide-up-in"} 0.28s cubic-bezier(0.32, 0.72, 0, 1) both`,
+            pointerEvents: panelAnimatingOut === "library" ? "none" : "auto",
+          }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(15,23,42,0.18)", margin: "0 auto 14px" }} />
+            <LibraryPanel {...libraryProps} />
+          </div>
+        </>
+      )}
+
+      {isMobile && (activeMenuPanel === "search" || panelAnimatingOut === "search") && (
+        <div style={{
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          left: "50%",
+          zIndex: 10,
+          width: "calc(100vw - 40px)",
+          maxWidth: 480,
+          background: "rgba(255,255,255,0.7)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          border: "1px solid rgba(255,255,255,0.55)",
+          borderRadius: 16,
+          boxShadow: "0 4px 24px rgba(15,23,42,0.12)",
+          padding: "10px 12px",
+          animation: `${panelAnimatingOut === "search" ? "fade-drop-out" : "fade-drop-in"} 0.22s ease both`,
+          pointerEvents: panelAnimatingOut === "search" ? "none" : "auto",
+        }}>
+          <SearchPanel
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
+            isSearchDropdownOpen={isSearchDropdownOpen} setIsSearchDropdownOpen={setIsSearchDropdownOpen}
+            handleSearchSelect={handleSearchSelect} handleSearchKeyDown={handleSearchKeyDown}
+            getSearchResultLabels={getSearchResultLabels} searchBoxRef={searchBoxRef}
+            inputStyle={{ ...inputStyle, background: "rgba(255,255,255,0.65)", border: "1px solid rgba(15,23,42,0.1)", borderRadius: 10 }}
+            autoFocus
+          />
+        </div>
+      )}
+
       <MapStylePicker
         mapStyle={mapStyle} setMapStyle={setMapStyle}
         locateUser={locateUser} locationState={locationState}
@@ -578,48 +668,78 @@ export default function App() {
         isLocationFlashOn={isLocationFlashOn} setIsLocationFlashOn={setIsLocationFlashOn}
         styleControlsRef={styleControlsRef}
         showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length} bottomSheetHeight={bottomSheetHeight}
+        elevationHidden={elevationHidden}
+        onStyleMenuOpen={() => isMobile && setActiveMenuPanel(null)}
       />
 
       <PendingPinDialog
         pendingPin={pendingPin}
         handleLocationYes={handleLocationYes} handleLocationNo={handleLocationNo}
+        handleLocationCancel={handleLocationCancel}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
       />
 
       {mapStyle === "outdoor" && (
         <div
-          onClick={() => setShowCyclingOverlay((v) => !v)}
+          onClick={() => elevationHidden && setShowCyclingOverlay((v) => !v)}
           role="button"
           aria-pressed={showCyclingOverlay}
           style={{
-            position: "absolute", bottom: 10, right: 10, zIndex: 2,
-            background: "rgba(255,255,255,0.92)",
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            borderRadius: 999,
-            padding: "10px 16px",
-            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.12)",
-            display: "flex", alignItems: "center", gap: 10,
+            position: "absolute",
+            bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+            right: 20,
+            opacity: elevationHidden ? 1 : 0,
+            pointerEvents: elevationHidden ? "auto" : "none",
+            transition: "opacity 0.2s ease",
+            zIndex: 4,
+            background: "rgba(255,255,255,0.72)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.6)",
+            borderRadius: 20,
+            padding: "7px 14px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+            display: "flex", alignItems: "center", gap: 8,
             cursor: "pointer",
             userSelect: "none", WebkitTapHighlightColor: "transparent",
+            lineHeight: 1,
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#24364b" }}>Cycling routes</span>
-          <div style={{
-            width: 42, height: 26, borderRadius: 999,
-            background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
-            position: "relative",
-            transition: "background 0.2s ease",
-            flexShrink: 0,
-          }}>
+          {isMobile ? (
+            <span
+              key={showCyclingOverlay ? "on" : "off"}
+              style={{
+                fontSize: 12, fontWeight: 500, letterSpacing: 0.1, color: "#0f172a",
+                display: "inline-block",
+                animation: "panel-pop-in 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both",
+              }}
+            >
+              {`Routes ${showCyclingOverlay ? "on" : "off"}`}
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: 0.1, color: "#0f172a" }}>
+              Cycling routes
+            </span>
+          )}
+          {!isMobile && (
             <div style={{
-              position: "absolute",
-              top: 3, left: showCyclingOverlay ? 19 : 3,
-              width: 20, height: 20, borderRadius: "50%",
-              background: "#fff",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-              transition: "left 0.2s ease",
-            }} />
-          </div>
+              width: 32, height: 18, borderRadius: 999,
+              background: showCyclingOverlay ? "#34c759" : "rgba(120,120,128,0.32)",
+              position: "relative",
+              transition: "background 0.2s ease",
+              flexShrink: 0,
+            }}>
+              <div style={{
+                position: "absolute",
+                top: 2, left: showCyclingOverlay ? 14 : 2,
+                width: 14, height: 14, borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+                transition: "left 0.2s ease",
+              }} />
+            </div>
+          )}
         </div>
       )}
     </>

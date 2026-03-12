@@ -435,6 +435,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const appleMapReadyRef = useRef(false);
   const waypointsRef = useRef([]);
   const markersRef = useRef([]);
+  const segmentLabelMarkersRef = useRef([]);
   const routeDataRef = useRef(null);
   const geolocateControlRef = useRef(null);
   const userLocationRef = useRef(null);
@@ -468,6 +469,8 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
   // Stable internal functions stored in a ref so they can call each other
   const fns = useRef(null);
+  const routingDebounceRef = useRef(null);
+  const routingAbortRef = useRef(null);
 
   // ---------- Map init ----------
   useEffect(() => {
@@ -640,6 +643,60 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         removeLayerAndSource(map, "route-hit-area", "route");
       }
 
+      function clearSegmentLabels() {
+        segmentLabelMarkersRef.current.forEach((m) => m.remove());
+        segmentLabelMarkersRef.current = [];
+      }
+
+      function renderSegmentLabels(routeData) {
+        clearSegmentLabels();
+        const props = routeData?.features?.[0]?.properties;
+        const coords = routeData?.features?.[0]?.geometry?.coordinates;
+        if (!props || !coords) return;
+
+        const wayPts = props.way_points;
+        const segments = props.segments;
+        if (!wayPts || !segments || wayPts.length < 2) return;
+
+        for (let i = 0; i < segments.length; i++) {
+          const startIdx = wayPts[i];
+          const endIdx = wayPts[i + 1];
+          if (endIdx == null) continue;
+
+          const midIdx = Math.round((startIdx + endIdx) / 2);
+          const midCoord = coords[midIdx];
+          if (!midCoord) continue;
+
+          const distKm = (segments[i].distance / 1000).toFixed(2);
+          const label = parseFloat(distKm) < 1
+            ? `${(segments[i].distance).toFixed(0)} m`
+            : `${distKm} km`;
+
+          const el = document.createElement("div");
+          el.style.cssText = [
+            "display:inline-block",
+            "background:rgba(255,255,255,0.93)",
+            "border-radius:20px",
+            "padding:3px 9px",
+            "font-size:11px",
+            "font-weight:600",
+            "color:#1c1c1e",
+            "box-shadow:0 1px 5px rgba(0,0,0,0.18)",
+            "white-space:nowrap",
+            "pointer-events:none",
+            "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+            "letter-spacing:0.01em",
+            "user-select:none",
+          ].join(";");
+          el.textContent = label;
+
+          const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+            .setLngLat([midCoord[0], midCoord[1]])
+            .addTo(map);
+          segmentLabelMarkersRef.current.push(marker);
+        }
+      }
+
       function clearRouteState() {
         elevationHoverCoordRef.current = null;
         removeRouteHoverLayers(map);
@@ -649,10 +706,22 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         setElevationGainM("0");
         setElevationLossM("0");
         clearRouteLayer();
+        clearSegmentLabels();
       }
 
-      async function calculateRoute() {
+      function calculateRoute() {
         if (waypointsRef.current.length < 2) return;
+        clearTimeout(routingDebounceRef.current);
+        routingDebounceRef.current = setTimeout(() => fns.current._doCalculateRoute(), 400);
+      }
+
+      async function _doCalculateRoute() {
+        if (waypointsRef.current.length < 2) return;
+
+        // Cancel any in-flight request
+        if (routingAbortRef.current) routingAbortRef.current.abort();
+        const controller = new AbortController();
+        routingAbortRef.current = controller;
 
         const mode = ROUTING_MODES[routingModeRef.current] || ROUTING_MODES.gravel;
         let routeWaypoints = waypointsRef.current;
@@ -672,6 +741,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         setIsRouting(true);
         setRoutingError(null);
 
+        const timeout = setTimeout(() => controller.abort(), 15000);
         try {
           const res = await fetch(
             `https://api.openrouteservice.org/v2/directions/${mode.profile}/geojson`,
@@ -679,9 +749,18 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
               method: "POST",
               headers: { Authorization: ORS_API_KEY, "Content-Type": "application/json" },
               body: JSON.stringify({ coordinates: routeWaypoints, elevation: true }),
+              signal: controller.signal,
             }
           );
+          clearTimeout(timeout);
           const data = await res.json();
+
+          if (!res.ok) {
+            const msg = data?.error?.message || data?.message || `API error ${res.status}`;
+            console.error("ORS API error:", data);
+            setRoutingError(`Routing failed: ${msg}`);
+            return;
+          }
 
           if (!data.features?.length) {
             setRoutingError("No route found. Try moving your waypoints.");
@@ -700,11 +779,22 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           setElevationLossM(loss.toFixed(0));
 
           addRouteLayers(map, data);
+          renderSegmentLabels(data);
         } catch (err) {
+          clearTimeout(timeout);
+          if (err.name === "AbortError") {
+            // Cancelled by a newer request — only show error if this controller is still current
+            if (routingAbortRef.current === controller) {
+              setRoutingError("Routing timed out. Check your connection.");
+            }
+            return;
+          }
           console.error("Routing error:", err);
           setRoutingError("Routing failed. Check your connection and try again.");
         } finally {
-          setIsRouting(false);
+          if (routingAbortRef.current === controller) {
+            setIsRouting(false);
+          }
         }
       }
 
@@ -725,7 +815,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         fns.current.calculateRoute();
       };
 
-      fns.current = { calculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint };
+      fns.current = { calculateRoute, _doCalculateRoute, clearRouteState, renderMarkers, clearRouteLayer, addWaypoint, renderSegmentLabels, clearSegmentLabels };
 
     // --- Map events ---
     map.on("load", () => {
@@ -1054,7 +1144,10 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
 
     fns.current?.renderMarkers();
 
-    if (routeDataRef.current) addRouteLayers(map, routeDataRef.current);
+    if (routeDataRef.current) {
+      addRouteLayers(map, routeDataRef.current);
+      fns.current?.renderSegmentLabels(routeDataRef.current);
+    }
 
     if (waypointsRef.current.length) {
       const lngs = waypointsRef.current.map((p) => p[0]);
