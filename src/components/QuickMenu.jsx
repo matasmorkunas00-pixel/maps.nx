@@ -141,8 +141,7 @@ export function QuickMenu({
     >
       {activeMenuPanel === "library" && !isMobile && (
         <div
-          onPointerDown={(event) => {
-            event.preventDefault();
+          onClick={(event) => {
             event.stopPropagation();
             toggleMenuPanel("library");
           }}
