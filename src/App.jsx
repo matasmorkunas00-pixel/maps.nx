@@ -41,8 +41,6 @@ export default function App() {
   const [isStyleMenuOpen, setIsStyleMenuOpen] = useState(false);
   const [isMapModesFlashOn, setIsMapModesFlashOn] = useState(false);
   const [isLocationFlashOn, setIsLocationFlashOn] = useState(false);
-  const [cloudAuthEmail, setCloudAuthEmail] = useState("");
-  const [cloudAuthMessage, setCloudAuthMessage] = useState(null);
   const [cloudRoutesError, setCloudRoutesError] = useState(null);
   const [libraryError, setLibraryError] = useState(null);
   const [libraryMessage, setLibraryMessage] = useState(null);
@@ -138,7 +136,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(routes)); }, [routes]);
   useEffect(() => { localStorage.setItem(GPX_LIBRARY_STORAGE_KEY, JSON.stringify(guestImportedRoutes)); }, [guestImportedRoutes]);
 
-  const { isConfigured: isSupabaseConfigured, isReady: isSupabaseAuthReady, user: supabaseUser, userEmail: supabaseUserEmail, sendMagicLink, signOut: signOutOfSupabase } = useSupabaseAuth();
+  const { isConfigured: isSupabaseConfigured, isReady: isSupabaseAuthReady, user: supabaseUser, userEmail: supabaseUserEmail, userName: supabaseUserName, userAvatarUrl: supabaseUserAvatarUrl, signInWithGoogle, signOut: signOutOfSupabase } = useSupabaseAuth();
 
   const isCloudLibraryActive = isSupabaseConfigured && !!supabaseUser;
   const importedRoutes = isCloudLibraryActive ? cloudImportedRoutes : guestImportedRoutes;
@@ -463,14 +461,14 @@ export default function App() {
     finally { setIsCloudRoutesLoading(false); }
   };
 
-  const handleCloudSignIn = async () => {
-    setCloudRoutesError(null); setCloudAuthMessage(null);
-    try { const email = await sendMagicLink(cloudAuthEmail); setCloudAuthMessage(`Magic link sent to ${email}`); }
-    catch (error) { setCloudRoutesError(`Failed to send sign-in link: ${error?.message || "Unknown error"}`); }
+  const handleSignInWithGoogle = async () => {
+    setCloudRoutesError(null);
+    try { await signInWithGoogle(); }
+    catch (error) { setCloudRoutesError(`Failed to sign in: ${error?.message || "Unknown error"}`); }
   };
 
   const handleCloudSignOut = async () => {
-    setCloudRoutesError(null); setCloudAuthMessage(null);
+    setCloudRoutesError(null);
     try { await signOutOfSupabase(); }
     catch (error) { setCloudRoutesError(`Failed to sign out: ${error?.message || "Unknown error"}`); }
   };
@@ -532,8 +530,9 @@ export default function App() {
   const libraryProps = {
     isMobile,
     isSupabaseConfigured, isSupabaseAuthReady, supabaseUser, supabaseUserEmail,
-    isCloudLibraryActive, isCloudRoutesLoading, cloudRoutesError, cloudAuthEmail, setCloudAuthEmail, cloudAuthMessage,
-    refreshCloudRoutes, handleCloudSignIn, handleCloudSignOut,
+    isCloudLibraryActive, isCloudRoutesLoading, cloudRoutesError,
+    supabaseUserName, supabaseUserAvatarUrl,
+    refreshCloudRoutes, handleSignInWithGoogle, handleCloudSignOut,
     importedRoutes, cloudImportedRoutes, routes, activeRouteId,
     availableFolders, activeVisibleFolders, openFolders, selectedRouteIdsByFolder, bulkMoveTargets,
     libraryError, libraryMessage,
@@ -582,6 +581,22 @@ export default function App() {
           onHoverCoordinateChange={handleElevationHoverCoordinateChange}
           hasCyclingButton={!isMobile && mapStyle === "outdoor"}
           hidden={elevationHidden} setHidden={setElevationHidden}
+        />
+      )}
+
+      {activeMenuPanel === "library" && !isMobile && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); toggleMenuPanel("library"); }}
+          style={{ position: "fixed", inset: 0, zIndex: 4, background: "transparent" }}
+        />
+      )}
+
+      {isStyleMenuOpen && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setIsStyleMenuOpen(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 4, background: "transparent" }}
         />
       )}
 

@@ -32,20 +32,13 @@ export function useSupabaseAuth() {
     };
   }, []);
 
-  const sendMagicLink = useCallback(async (email) => {
+  const signInWithGoogle = useCallback(async () => {
     if (!supabase) throw new Error("Supabase is not configured");
-
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    if (!normalizedEmail) throw new Error("Enter your email address");
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
     });
     if (error) throw error;
-    return normalizedEmail;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -54,13 +47,17 @@ export function useSupabaseAuth() {
     if (error) throw error;
   }, []);
 
+  const user = session?.user ?? null;
+
   return {
     isConfigured: SUPABASE_CONFIGURED,
     isReady,
     session,
-    user: session?.user ?? null,
-    userEmail: session?.user?.email ?? null,
-    sendMagicLink,
+    user,
+    userEmail: user?.email ?? null,
+    userName: user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? null,
+    userAvatarUrl: user?.user_metadata?.avatar_url ?? null,
+    signInWithGoogle,
     signOut,
   };
 }
