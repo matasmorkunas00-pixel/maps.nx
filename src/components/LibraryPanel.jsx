@@ -107,10 +107,12 @@ export function LibraryPanel({
 
   const sortMenuStyle = {
     position: "absolute",
-    top: "calc(100% + 8px)",
+    bottom: "calc(100% + 8px)",
     right: 0,
     zIndex: 5,
     width: isMobile ? "min(100%, 280px)" : 270,
+    maxHeight: "min(52vh, 260px)",
+    overflowY: "auto",
     padding: 6,
     borderRadius: 17,
     background: "rgba(255,255,255,0.98)",
@@ -118,6 +120,7 @@ export function LibraryPanel({
     boxShadow: "0 22px 42px rgba(15,23,42,0.16)",
     backdropFilter: "blur(18px)",
     WebkitBackdropFilter: "blur(18px)",
+    transformOrigin: isMobile ? "bottom center" : "bottom right",
     animation: "panel-pop-in 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both",
   };
 
