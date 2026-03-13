@@ -224,7 +224,7 @@ export function LibraryPanel({
                       </button>
                     </div>
                     {/* Delete confirmation */}
-                    {deletingFolder === folder && (
+                    {isOpen && deletingFolder === folder && (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0 8px", flexWrap: "wrap" }}>
                         <button onClick={() => { removeFolder(folder); setDeletingFolder(null); }}
                           style={{ fontSize: 12, fontWeight: 600, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", padding: 0, transition: "color 0.15s" }}

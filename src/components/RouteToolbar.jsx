@@ -48,7 +48,6 @@ export function RouteToolbar({
   isMobile, isRouting, routingError,
   saveRoute, exportGPX,
   routeName, setRouteName,
-  newRoute,
   routingMode, setRoutingMode,
   getPressHandlers,
   pressedButton,
@@ -86,7 +85,7 @@ export function RouteToolbar({
             ? "opacity 0.22s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)"
             : "opacity 0.18s ease, transform 0.2s ease",
         }}>
-          {/* Row 1: route name + new + routing mode */}
+          {/* Row 1: route name + routing mode */}
           <div style={{ display: "flex", gap: 8 }}>
             <input
               value={routeName} onChange={(e) => setRouteName(e.target.value)}
@@ -99,19 +98,6 @@ export function RouteToolbar({
                 fontSize: 14, color: "#0f172a", outline: "none",
               }}
             />
-            <button
-              onClick={newRoute}
-              style={{
-                height: 36, padding: "0 16px", borderRadius: 10,
-                border: ELEM_BORDER,
-                background: pressedButton === "new" ? "rgba(210,220,232,0.88)" : ELEM_BG,
-                ...ELEM_BLUR,
-                fontSize: 13, fontWeight: 600, color: "#0f172a",
-                cursor: "pointer", flexShrink: 0,
-                WebkitTapHighlightColor: "transparent", outline: "none",
-              }}
-              {...getPressHandlers("new")}
-            >New</button>
             <select
               value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
               style={{
@@ -265,28 +251,13 @@ export function RouteToolbar({
           </button>
         </div>
 
-        {/* Route controls: name+new row, then routing select */}
+        {/* Route controls: name + routing select */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={routeName} onChange={(e) => setRouteName(e.target.value)}
-              placeholder="Route name"
-              style={{ ...inputBase, width: 130 }}
-            />
-            <button
-              onClick={newRoute}
-              style={{
-                ...inputBase,
-                padding: "0 14px",
-                fontWeight: 600,
-                cursor: "pointer",
-                flexShrink: 0,
-                background: pressedButton === "new" ? "rgba(220,228,238,0.7)" : ELEM_BG,
-                WebkitTapHighlightColor: "transparent",
-              }}
-              {...getPressHandlers("new")}
-            >New</button>
-          </div>
+          <input
+            value={routeName} onChange={(e) => setRouteName(e.target.value)}
+            placeholder="Route name"
+            style={{ ...inputBase, width: 160 }}
+          />
           <select
             value={routingMode} onChange={(e) => setRoutingMode(e.target.value)}
             style={{ ...inputBase, width: "100%" }}

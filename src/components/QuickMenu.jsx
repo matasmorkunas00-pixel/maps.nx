@@ -214,7 +214,7 @@ export function QuickMenu({
           </svg>
         </button>
         {activeMenuPanel === "library" && !isMobile && (
-          <div style={{ ...libraryPanelFloatingStyle, overflowY: "auto" }}>
+          <div style={{ ...libraryPanelFloatingStyle, overflowY: "auto", scrollbarGutter: "stable" }}>
             <LibraryPanel {...libraryProps} />
           </div>
         )}
