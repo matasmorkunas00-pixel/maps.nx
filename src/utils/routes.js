@@ -31,13 +31,15 @@ export function computeGeoJsonStats(features) {
   };
 }
 
-export function buildImportedRoutesGeoJson(importedRoutes, visibleFolders, focusedRouteId = null) {
+export function buildImportedRoutesGeoJson(importedRoutes, visibleFolders, focusedRouteId = null, isEditorMode = false) {
   return {
     type: "FeatureCollection",
     features: (Array.isArray(importedRoutes) ? importedRoutes : [])
       .filter((route) => route?.folder && visibleFolders.includes(route.folder))
       .flatMap((route) => {
-        const opacity = focusedRouteId ? (route.id === focusedRouteId ? 1.0 : 0.15) : null;
+        const opacity = focusedRouteId
+          ? (route.id === focusedRouteId ? 1.0 : 0.15)
+          : isEditorMode ? 0.2 : null;
         return (Array.isArray(route?.geoJson?.features) ? route.geoJson.features : []).map((feature) => ({
           ...feature,
           properties: {
