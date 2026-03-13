@@ -214,7 +214,8 @@ export default function App() {
     }
   }, [importedRoutes]);
 
-  const importedRoutesGeoJson = useMemo(() => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders, focusedImportedRouteId), [importedRoutes, activeVisibleFolders, focusedImportedRouteId]);
+  const isEditorMode = activeMenuPanel === "route";
+  const importedRoutesGeoJson = useMemo(() => buildImportedRoutesGeoJson(importedRoutes, activeVisibleFolders, focusedImportedRouteId, isEditorMode), [importedRoutes, activeVisibleFolders, focusedImportedRouteId, isEditorMode]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !isSupabaseAuthReady) return;
