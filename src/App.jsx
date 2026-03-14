@@ -16,6 +16,7 @@ import { PendingPinDialog } from "./components/PendingPinDialog";
 import { QuickMenu } from "./components/QuickMenu";
 import { SearchPanel } from "./components/SearchPanel";
 import { LibraryPanel } from "./components/LibraryPanel";
+import { UndoButton } from "./components/UndoButton";
 
 export default function App() {
   const appleMapContainerRef = useRef(null);
@@ -252,12 +253,12 @@ export default function App() {
     return () => { isCancelled = true; };
   }, [isSupabaseConfigured, isSupabaseAuthReady, supabaseUser]);
 
-  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation, clearPendingPinMarker } = useMap({
+  const { distanceKm, elevationGainM, elevationLossM, routeGeoJson, locationState, isRouting, routingError, waypointsRef, waypointsCount, routeDataRef, undoLast, clearAll, locateUser, routeToDestination, loadRouteOnMap, addWaypoint, setElevationHoverCoordinate, clearElevationHoverCoordinate, getCurrentLocation, clearPendingPinMarker } = useMap({
     appleMapContainerRef, mapContainerRef, mapStyle, importedRoutesGeoJson, routingMode, isMobile, speedMode, showCyclingOverlay,
     onFirstClick: (lngLat) => { setPendingPin(lngLat); setActiveMenuPanel(null); },
   });
 
-  const showRoutingUi = activeMenuPanel === "route" || waypointsRef.current.length > 0;
+  const showRoutingUi = activeMenuPanel === "route" || waypointsCount > 0;
   const bottomSheetHeight = isGraphExpanded ? "max(40vh, 300px)" : "68px";
 
   const handleElevationHoverCoordinateChange = useCallback((coordinates) => {
@@ -755,13 +756,21 @@ export default function App() {
           routingMode={routingMode} setRoutingMode={setRoutingMode}
           getPressHandlers={getPressHandlers}
           pressedButton={pressedButton}
-          waypointsCount={waypointsRef.current.length}
+          waypointsCount={waypointsCount}
           bottomSheetHeight={bottomSheetHeight}
           mobileVisible={!isMobile || activeMenuPanel === "route"}
         />
       )}
 
-      {showRoutingUi && waypointsRef.current.length > 0 && !(isMobile && activeMenuPanel === "library") && (
+      <UndoButton
+        onUndo={undoLast}
+        show={showRoutingUi && waypointsCount > 0 && !(isMobile && activeMenuPanel === "library")}
+        elevationHidden={elevationHidden || !routeGeoJson}
+        isMobile={isMobile}
+        hasCyclingButton={!isMobile && mapStyle === "outdoor"}
+      />
+
+      {showRoutingUi && waypointsCount > 0 && routeGeoJson && !(isMobile && activeMenuPanel === "library") && (
         <ElevationSheet
           routeGeoJson={routeGeoJson} elevationGainM={elevationGainM} elevationLossM={elevationLossM} distanceKm={distanceKm}
           isMobile={isMobile}
@@ -784,7 +793,7 @@ export default function App() {
         quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
         isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
-        showRoutingUi={showRoutingUi} waypointsCount={waypointsRef.current.length}
+        showRoutingUi={showRoutingUi} waypointsCount={waypointsCount}
         elevationHidden={elevationHidden}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}

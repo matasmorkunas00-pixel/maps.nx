@@ -506,6 +506,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
   const [isRouting, setIsRouting] = useState(false);
   const [routingError, setRoutingError] = useState(null);
   const [appleMapReady, setAppleMapReady] = useState(false);
+  const [waypointsCount, setWaypointsCount] = useState(0);
 
   useEffect(() => { routingModeRef.current = routingMode; }, [routingMode]);
   useEffect(() => { importedGeoJsonRef.current = importedRoutesGeoJson; }, [importedRoutesGeoJson]);
@@ -655,6 +656,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
           waypointTypesRef.current.splice(idx, 1);
           markersRef.current.splice(idx, 1);
           marker.remove();
+          setWaypointsCount(waypointsRef.current.length);
           if (waypointsRef.current.length < 2) {
             fns.current?.clearRouteState();
           } else {
@@ -912,6 +914,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
         const index = waypointsRef.current.length;
         waypointsRef.current.push([lng, lat]);
         waypointTypesRef.current.push('pin');
+        setWaypointsCount(waypointsRef.current.length);
 
         const marker = new maplibregl.Marker({ element: createMarkerElement(speedModeRef.current), draggable: true, anchor: 'center' })
           .setLngLat([lng, lat])
@@ -1140,6 +1143,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     if (!waypointsRef.current.length) return;
     waypointsRef.current.pop();
     waypointTypesRef.current.pop();
+    setWaypointsCount(waypointsRef.current.length);
     const marker = markersRef.current.pop();
     if (marker) marker.remove();
     if (waypointsRef.current.length < 2) {
@@ -1154,6 +1158,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     waypointTypesRef.current = [];
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    setWaypointsCount(0);
     fns.current?.clearRouteState();
   };
 
@@ -1275,6 +1280,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     waypointsRef.current = (savedRoute.waypoints || []).map(([lng, lat]) => [lng, lat]);
     waypointTypesRef.current = waypointsRef.current.map(() => 'pin');
     routeDataRef.current = savedRoute.routeGeoJson || null;
+    setWaypointsCount(waypointsRef.current.length);
 
     setDistanceKm(String(savedRoute.distanceKm || "0.00"));
     const { gain, loss } = calculateElevationProfile(savedRoute.routeGeoJson);
@@ -1361,6 +1367,7 @@ export function useMap({ appleMapContainerRef, mapContainerRef, mapStyle, import
     isRouting,
     routingError,
     waypointsRef,
+    waypointsCount,
     routeDataRef,
     undoLast,
     clearAll,
