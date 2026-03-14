@@ -7,6 +7,7 @@ export const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 export const GPX_ROUTES_TABLE = "gpx_routes";
 export const GPX_FOLDERS_TABLE = "gpx_folders";
 export const GPX_FILES_BUCKET = "gpx-files";
+export const SAVED_ROUTES_TABLE = "saved_routes";
 
 export const supabase = SUPABASE_CONFIGURED
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
