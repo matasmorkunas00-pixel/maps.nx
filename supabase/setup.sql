@@ -1,5 +1,42 @@
 create extension if not exists pgcrypto;
 
+-- Saved Routes: routes built with the route planner (synced across devices)
+create table if not exists public.saved_routes (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null default 'My Route',
+  routing_mode text not null default 'default',
+  waypoints jsonb not null default '[]',
+  route_geo_json jsonb,
+  distance_km text,
+  elevation_gain_m text,
+  elevation_loss_m text,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.saved_routes enable row level security;
+
+drop policy if exists "Users can view their own saved routes" on public.saved_routes;
+create policy "Users can view their own saved routes"
+on public.saved_routes for select to authenticated
+using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert their own saved routes" on public.saved_routes;
+create policy "Users can insert their own saved routes"
+on public.saved_routes for insert to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update their own saved routes" on public.saved_routes;
+create policy "Users can update their own saved routes"
+on public.saved_routes for update to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their own saved routes" on public.saved_routes;
+create policy "Users can delete their own saved routes"
+on public.saved_routes for delete to authenticated
+using ((select auth.uid()) = user_id);
+
 create table if not exists public.gpx_routes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,

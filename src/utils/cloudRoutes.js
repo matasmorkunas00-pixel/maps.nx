@@ -1,6 +1,6 @@
 import { parseGpxText } from "./gpx";
 import { getDefaultRouteColor, normalizeImportedRoute } from "./routes";
-import { GPX_FILES_BUCKET, GPX_FOLDERS_TABLE, GPX_ROUTES_TABLE, supabase } from "./supabase";
+import { GPX_FILES_BUCKET, GPX_FOLDERS_TABLE, GPX_ROUTES_TABLE, SAVED_ROUTES_TABLE, supabase } from "./supabase";
 
 function ensureSupabase() {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -221,6 +221,66 @@ export async function deleteCloudImportedRoutes(routes) {
   if (storagePaths.length) {
     await client.storage.from(GPX_FILES_BUCKET).remove(storagePaths);
   }
+}
+
+export async function listCloudSavedRoutes(userId) {
+  const client = ensureSupabase();
+  const { data: rows, error } = await client
+    .from(SAVED_ROUTES_TABLE)
+    .select("id, name, routing_mode, waypoints, route_geo_json, distance_km, elevation_gain_m, elevation_loss_m, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (rows || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    routingMode: row.routing_mode,
+    waypoints: Array.isArray(row.waypoints) ? row.waypoints : [],
+    routeGeoJson: row.route_geo_json || null,
+    distanceKm: row.distance_km || "0.00",
+    elevationGainM: row.elevation_gain_m || "0",
+    elevationLossM: row.elevation_loss_m || "0",
+  })).filter((r) => r.routeGeoJson);
+}
+
+export async function upsertCloudSavedRoute(userId, route) {
+  const client = ensureSupabase();
+  const { error } = await client
+    .from(SAVED_ROUTES_TABLE)
+    .upsert({
+      id: route.id,
+      user_id: userId,
+      name: route.name,
+      routing_mode: route.routingMode || "default",
+      waypoints: route.waypoints || [],
+      route_geo_json: route.routeGeoJson,
+      distance_km: route.distanceKm,
+      elevation_gain_m: route.elevationGainM,
+      elevation_loss_m: route.elevationLossM,
+      created_at: route.createdAt,
+    }, { onConflict: "id" });
+  if (error) throw error;
+}
+
+export async function deleteCloudSavedRoute(routeId) {
+  const client = ensureSupabase();
+  const { error } = await client
+    .from(SAVED_ROUTES_TABLE)
+    .delete()
+    .eq("id", routeId);
+  if (error) throw error;
+}
+
+export async function updateCloudSavedRouteName(routeId, name) {
+  const client = ensureSupabase();
+  const { error } = await client
+    .from(SAVED_ROUTES_TABLE)
+    .update({ name })
+    .eq("id", routeId);
+  if (error) throw error;
 }
 
 export async function deleteCloudFolder({ userId, name, allowMissingTable = false }) {

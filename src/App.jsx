@@ -8,7 +8,7 @@ import { normalizeFolderName, appendFolderName, loadStoredFolderNames } from "./
 import { fetchSearchResults } from "./utils/search";
 import { useMap } from "./hooks/useMap";
 import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
-import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRoutesFolder, deleteCloudImportedRoutes, deleteCloudFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError } from "./utils/cloudRoutes";
+import { listCloudImportedRoutes, listCloudFolders, createCloudFolder, updateCloudImportedRouteColor, updateCloudImportedRoutesFolder, deleteCloudImportedRoutes, deleteCloudFolder, uploadCloudImportedRoute, isMissingCloudFoldersTableError, listCloudSavedRoutes, upsertCloudSavedRoute, deleteCloudSavedRoute, updateCloudSavedRouteName } from "./utils/cloudRoutes";
 import { createStyleHelpers } from "./styles/appStyles";
 import { RouteToolbar } from "./components/RouteToolbar";
 import { ElevationSheet } from "./components/ElevationSheet";
@@ -58,6 +58,9 @@ export default function App() {
   const [elevationHidden, setElevationHidden] = useState(false);
   const [panelAnimatingOut, setPanelAnimatingOut] = useState(null);
   const panelAnimOutTimer = useRef(null);
+  const [routeContextMenu, setRouteContextMenu] = useState(null); // { id, top, right }
+  const [pendingOverwriteEntry, setPendingOverwriteEntry] = useState(null);
+  const [pendingDeleteRouteId, setPendingDeleteRouteId] = useState(null);
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -128,12 +131,13 @@ export default function App() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [searchQuery]);
 
-  const [routes, setRoutes] = useState(() => {
+  const [guestRoutes, setGuestRoutes] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       return raw ? JSON.parse(raw).map((r, i) => normalizeSavedRoute(r, i)).filter(Boolean) : [];
     } catch { return []; }
   });
+  const [cloudSavedRoutes, setCloudSavedRoutes] = useState([]);
 
   const [guestImportedRoutes, setGuestImportedRoutes] = useState(() => {
     try {
@@ -145,12 +149,13 @@ export default function App() {
   const [guestFolders, setGuestFolders] = useState(loadStoredFolderNames);
   const [cloudFolders, setCloudFolders] = useState([]);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(routes)); }, [routes]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(guestRoutes)); }, [guestRoutes]);
   useEffect(() => { localStorage.setItem(GPX_LIBRARY_STORAGE_KEY, JSON.stringify(guestImportedRoutes)); }, [guestImportedRoutes]);
 
   const { isConfigured: isSupabaseConfigured, isReady: isSupabaseAuthReady, user: supabaseUser, userEmail: supabaseUserEmail, userName: supabaseUserName, userAvatarUrl: supabaseUserAvatarUrl, signInWithGoogle, signOut: signOutOfSupabase } = useSupabaseAuth();
 
   const isCloudLibraryActive = isSupabaseConfigured && !!supabaseUser;
+  const routes = isCloudLibraryActive ? cloudSavedRoutes : guestRoutes;
   const importedRoutes = isCloudLibraryActive ? cloudImportedRoutes : guestImportedRoutes;
   const explicitFolders = isCloudLibraryActive ? cloudFolders : guestFolders;
 
@@ -219,13 +224,13 @@ export default function App() {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !isSupabaseAuthReady) return;
-    if (!supabaseUser) { setCloudImportedRoutes([]); setCloudFolders([]); setCloudRoutesError(null); return; }
+    if (!supabaseUser) { setCloudImportedRoutes([]); setCloudFolders([]); setCloudSavedRoutes([]); setCloudRoutesError(null); return; }
     let isCancelled = false;
     const load = async () => {
       setIsCloudRoutesLoading(true);
       setCloudRoutesError(null);
       try {
-        const [routesResult, foldersResult] = await Promise.allSettled([listCloudImportedRoutes(supabaseUser.id), listCloudFolders(supabaseUser.id)]);
+        const [routesResult, foldersResult, savedRoutesResult] = await Promise.allSettled([listCloudImportedRoutes(supabaseUser.id), listCloudFolders(supabaseUser.id), listCloudSavedRoutes(supabaseUser.id)]);
         if (isCancelled) return;
         if (routesResult.status === "fulfilled") setCloudImportedRoutes(routesResult.value);
         else throw routesResult.reason;
@@ -235,6 +240,8 @@ export default function App() {
           setCloudFolders([]);
           if (!isMissingCloudFoldersTableError(foldersResult.reason)) setCloudRoutesError(`Failed to load cloud GPX folders: ${foldersResult.reason?.message || "Unknown error"}`);
         }
+        if (savedRoutesResult.status === "fulfilled") setCloudSavedRoutes(savedRoutesResult.value);
+        else console.error("Failed to load cloud saved routes:", savedRoutesResult.reason);
       } catch (error) {
         if (!isCancelled) setCloudRoutesError(`Failed to load cloud GPX library: ${error?.message || "Unknown error"}`);
       } finally {
@@ -275,16 +282,30 @@ export default function App() {
     finally { setPendingPin(null); }
   };
 
-  const saveRoute = () => {
-    if (!routeDataRef.current || waypointsRef.current.length < 2) return;
-    const entry = { id: activeRouteId || uid(), name: routeName || "My Route", createdAt: new Date().toISOString(), routingMode, waypoints: waypointsRef.current, routeGeoJson: routeDataRef.current, distanceKm, elevationGainM, elevationLossM };
-    setRoutes((prev) => { const exists = prev.find((r) => r.id === entry.id); return exists ? prev.map((r) => r.id === entry.id ? entry : r) : [entry, ...prev]; });
+  const doSaveRoute = (entry) => {
+    const updater = (prev) => { const exists = prev.find((r) => r.id === entry.id); return exists ? prev.map((r) => r.id === entry.id ? entry : r) : [entry, ...prev]; };
+    if (isCloudLibraryActive && supabaseUser) {
+      setCloudSavedRoutes(updater);
+      upsertCloudSavedRoute(supabaseUser.id, entry).catch((err) => console.error("Failed to sync route to cloud:", err));
+    } else {
+      setGuestRoutes(updater);
+    }
     setActiveRouteId(entry.id);
     setSavedRouteRevealTick((cur) => cur + 1);
     setIsStyleMenuOpen(false);
     if (isMobile) setIsGraphExpanded(false);
     setActiveMenuPanel("library");
   };
+
+  const saveRoute = () => {
+    if (!routeDataRef.current || waypointsRef.current.length < 2) return;
+    const entry = { id: activeRouteId || uid(), name: routeName || "My Route", createdAt: new Date().toISOString(), routingMode, waypoints: waypointsRef.current, routeGeoJson: routeDataRef.current, distanceKm, elevationGainM, elevationLossM };
+    if (routes.some((r) => r.id === entry.id)) { setPendingOverwriteEntry(entry); return; }
+    doSaveRoute(entry);
+  };
+
+  const confirmOverwrite = () => { if (!pendingOverwriteEntry) return; doSaveRoute(pendingOverwriteEntry); setPendingOverwriteEntry(null); };
+  const cancelOverwrite = () => setPendingOverwriteEntry(null);
 
   const loadRoute = (id) => {
     const r = routes.find((x) => x.id === id);
@@ -295,11 +316,69 @@ export default function App() {
   };
 
   const deleteRoute = (id) => {
-    setRoutes((prev) => prev.filter((r) => r.id !== id));
+    if (isCloudLibraryActive && supabaseUser) {
+      setCloudSavedRoutes((prev) => prev.filter((r) => r.id !== id));
+      deleteCloudSavedRoute(id).catch((err) => console.error("Failed to delete route from cloud:", err));
+    } else {
+      setGuestRoutes((prev) => prev.filter((r) => r.id !== id));
+    }
     if (activeRouteId === id) { setActiveRouteId(null); setRouteName("My Route"); clearAll(); }
   };
 
   const newRoute = () => { setActiveRouteId(null); setRouteName("My Route"); clearAll(); };
+
+  // Wrap clearAll so the toolbar's Clear button also resets the active route ID,
+  // preventing the next Save from overwriting a previously-saved route.
+  const handleClearAll = useCallback(() => {
+    setActiveRouteId(null);
+    setRouteName("My Route");
+    clearAll();
+  }, [clearAll]);
+
+  const renameRoute = useCallback((id, newName) => {
+    const name = (newName || "").trim() || "My Route";
+    const updater = (prev) => prev.map((r) => r.id === id ? { ...r, name } : r);
+    if (isCloudLibraryActive && supabaseUser) {
+      setCloudSavedRoutes(updater);
+      updateCloudSavedRouteName(id, name).catch((err) => console.error("Failed to rename route in cloud:", err));
+    } else {
+      setGuestRoutes(updater);
+    }
+    if (activeRouteId === id) setRouteName(name);
+  }, [isCloudLibraryActive, supabaseUser, activeRouteId]);
+
+  const exportRouteById = useCallback((id) => {
+    const r = routes.find((x) => x.id === id);
+    if (!r?.routeGeoJson) return;
+    const gpx = buildGpxFromRouteGeoJson(r.routeGeoJson, r.name || "Route");
+    if (!gpx) return;
+    const url = URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `${(r.name || "route").replace(/\s+/g, "_")}.gpx`; a.click();
+    URL.revokeObjectURL(url);
+  }, [routes]);
+
+  const openRouteContextMenu = useCallback((id, rect) => {
+    const menuHeight = 128;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight + 8 ? rect.bottom + 4 : Math.max(8, rect.top - menuHeight - 4);
+    setRouteContextMenu({ id, top, right: Math.max(8, window.innerWidth - rect.right) });
+  }, []);
+
+  const shareRouteById = useCallback(async (id) => {
+    const r = routes.find((x) => x.id === id);
+    if (!r?.routeGeoJson) return;
+    const gpx = buildGpxFromRouteGeoJson(r.routeGeoJson, r.name || "Route");
+    if (!gpx) return;
+    const fileName = `${(r.name || "route").replace(/[^a-zA-Z0-9_.-]/g, "_")}.gpx`;
+    const file = new File([gpx], fileName, { type: "application/gpx+xml" });
+    if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ title: r.name, files: [file] }); }
+      catch (err) { if (err?.name !== "AbortError") exportRouteById(id); }
+    } else {
+      exportRouteById(id);
+    }
+  }, [routes, exportRouteById]);
 
   const exportGPX = () => {
     if (!routeDataRef.current) return;
@@ -554,8 +633,8 @@ export default function App() {
     if (!supabaseUser) return;
     setIsCloudRoutesLoading(true); setCloudRoutesError(null);
     try {
-      const [r, f] = await Promise.all([listCloudImportedRoutes(supabaseUser.id), listCloudFolders(supabaseUser.id).catch((e) => { console.error(e); return []; })]);
-      setCloudImportedRoutes(r); setCloudFolders(f);
+      const [r, f, s] = await Promise.all([listCloudImportedRoutes(supabaseUser.id), listCloudFolders(supabaseUser.id).catch((e) => { console.error(e); return []; }), listCloudSavedRoutes(supabaseUser.id).catch((e) => { console.error(e); return []; })]);
+      setCloudImportedRoutes(r); setCloudFolders(f); setCloudSavedRoutes(s);
     } catch (error) { setCloudRoutesError(`Failed to refresh cloud GPX library: ${error?.message || "Unknown error"}`); }
     finally { setIsCloudRoutesLoading(false); }
   };
@@ -583,6 +662,13 @@ export default function App() {
     clearTimeout(panelAnimOutTimer.current);
     panelAnimOutTimer.current = setTimeout(() => setPanelAnimatingOut(null), 280);
   }, []);
+
+  const handleEditRoute = useCallback((id) => {
+    loadRoute(id);
+    if (isMobile && activeMenuPanel === "library") closeMobilePanel("library");
+    setActiveMenuPanel(null);
+    setRouteContextMenu(null);
+  }, [loadRoute, isMobile, activeMenuPanel, closeMobilePanel]);
 
   const handleSearchSelect = async (feature) => {
     if (!Array.isArray(feature?.center) || feature.center.length < 2) return;
@@ -641,7 +727,8 @@ export default function App() {
     toggleFolderVisibility, toggleFolderOpen, selectAllRoutesInFolder, clearFolderSelection,
     toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor, deleteImportedRoutes,
     setBulkMoveTargets, setVisibleFolders, removeFolder, handleCreateFolder,
-    loadRoute, deleteRoute,
+    loadRoute,
+    openRouteContextMenu, activeRouteMenuId: routeContextMenu?.id ?? null,
     focusedImportedRouteId, focusImportedRoute,
     gpxFileInputRef,
     getPressHandlers, pressedButton,
@@ -659,7 +746,7 @@ export default function App() {
 
       {showRoutingUi && !(isMobile && (activeMenuPanel === "search" || activeMenuPanel === "library")) && (
         <RouteToolbar
-          undoLast={undoLast} clearAll={clearAll}
+          undoLast={undoLast} clearAll={handleClearAll}
           distanceKm={distanceKm} elevationGainM={elevationGainM}
           isMobile={isMobile} isRouting={isRouting} routingError={routingError}
           saveRoute={saveRoute} exportGPX={exportGPX}
@@ -852,6 +939,71 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* ── Route context menu (position:fixed, escapes all overflow/transform containers) ── */}
+      {routeContextMenu && (() => {
+        return (
+          <>
+            <div onPointerDown={() => setRouteContextMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
+            <div style={{ position: "fixed", top: routeContextMenu.top, right: routeContextMenu.right, zIndex: 200, background: "#fff", border: "1px solid rgba(226,232,240,0.9)", borderRadius: 14, boxShadow: "0 8px 32px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.07)", minWidth: 160, overflow: "hidden", animation: "panel-pop-in 0.16s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+              {[
+                { label: "Edit", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>, color: "#18212f", hoverBg: "rgba(241,245,249,0.9)", onClick: () => { handleEditRoute(routeContextMenu.id); setRouteContextMenu(null); } },
+                { label: "Share", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>, color: "#18212f", hoverBg: "rgba(241,245,249,0.9)", onClick: () => { shareRouteById(routeContextMenu.id); setRouteContextMenu(null); } },
+                null, // divider
+                { label: "Delete", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>, color: "#ef4444", hoverBg: "rgba(254,242,242,0.8)", onClick: () => { setPendingDeleteRouteId(routeContextMenu.id); setRouteContextMenu(null); } },
+              ].map((item, i) => item === null ? (
+                <div key={`div-${i}`} style={{ height: 1, background: "rgba(226,232,240,0.7)", margin: "2px 0" }} />
+              ) : (
+                <button key={item.label}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={item.onClick}
+                  style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 500, color: item.color, textAlign: "left", transition: "background 0.1s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = item.hoverBg; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <span style={{ color: item.color === "#ef4444" ? "#ef4444" : "#64748b", flexShrink: 0, display: "flex" }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── Overwrite confirmation dialog ── */}
+      {pendingOverwriteEntry && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
+          <div style={{ background: "#fff", borderRadius: 18, padding: "24px 22px", width: "min(320px, calc(100vw - 40px))", boxShadow: "0 24px 64px rgba(15,23,42,0.18)", animation: "panel-pop-in 0.2s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#18212f", marginBottom: 8 }}>Overwrite route?</div>
+            <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6, marginBottom: 22 }}>
+              Do you want to overwrite <strong style={{ color: "#18212f" }}>"{pendingOverwriteEntry.name}"</strong> with your current route?
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={cancelOverwrite} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid rgba(226,232,240,0.9)", background: "#fff", fontSize: 13, fontWeight: 600, color: "#64748b", cursor: "pointer", transition: "background 0.12s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; }}>Cancel</button>
+              <button onClick={confirmOverwrite} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#2563eb", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", transition: "background 0.12s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#1d4ed8"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "#2563eb"; }}>Overwrite</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirmation dialog ── */}
+      {pendingDeleteRouteId && (() => {
+        const delRoute = routes.find((r) => r.id === pendingDeleteRouteId);
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
+            <div style={{ background: "#fff", borderRadius: 18, padding: "24px 22px", width: "min(320px, calc(100vw - 40px))", boxShadow: "0 24px 64px rgba(15,23,42,0.18)", animation: "panel-pop-in 0.2s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#18212f", marginBottom: 8 }}>Delete route?</div>
+              <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6, marginBottom: 22 }}>
+                <strong style={{ color: "#18212f" }}>"{delRoute?.name}"</strong> will be permanently deleted and cannot be recovered.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setPendingDeleteRouteId(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid rgba(226,232,240,0.9)", background: "#fff", fontSize: 13, fontWeight: 600, color: "#64748b", cursor: "pointer", transition: "background 0.12s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; }}>No, keep it</button>
+                <button onClick={() => { deleteRoute(pendingDeleteRouteId); setPendingDeleteRouteId(null); }} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#ef4444", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", transition: "background 0.12s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#dc2626"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "#ef4444"; }}>Yes, delete</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

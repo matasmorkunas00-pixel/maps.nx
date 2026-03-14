@@ -42,7 +42,7 @@ export function LibraryPanel({
   toggleFolderVisibility, toggleFolderOpen, selectAllRoutesInFolder, clearFolderSelection,
   toggleRouteSelection, moveImportedRoutesToFolder, updateImportedRouteColor, deleteImportedRoutes,
   setBulkMoveTargets, setVisibleFolders, removeFolder, handleCreateFolder,
-  loadRoute, deleteRoute,
+  loadRoute, openRouteContextMenu, activeRouteMenuId,
   focusedImportedRouteId, focusImportedRoute,
   gpxFileInputRef,
   // styles
@@ -338,16 +338,19 @@ export function LibraryPanel({
               {sortedRoutes.map((r) => (
                 <div key={r.id} ref={r.id === activeRouteId ? activeSavedRouteRef : null}
                   style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid rgba(226,232,240,0.7)" }}>
-                  <button onClick={() => loadRoute(r.id)} style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
-                    <div style={{ fontSize: 13, fontWeight: r.id === activeRouteId ? 700 : 600, color: r.id === activeRouteId ? "#2563eb" : "#18212f" }}>{r.name}</div>
+                  <button onClick={() => loadRoute(r.id)} style={{ textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: r.id === activeRouteId ? 700 : 600, color: r.id === activeRouteId ? "#2563eb" : "#18212f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
                     <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4, marginTop: 1 }}>{r.distanceKm} km ↑{r.elevationGainM} m · {formatSavedRouteDate(r.createdAt)}</div>
                   </button>
-                  <button onClick={() => deleteRoute(r.id)} title="Delete"
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", padding: "2px", lineHeight: 0, transition: "color 0.15s", flexShrink: 0 }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "#cbd5e1"; }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                  <button
+                    onClick={(e) => openRouteContextMenu(r.id, e.currentTarget.getBoundingClientRect())}
+                    title="Options"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer", background: activeRouteMenuId === r.id ? "rgba(241,245,249,1)" : "transparent", color: activeRouteMenuId === r.id ? "#18212f" : "#94a3b8", transition: "background 0.15s, color 0.15s", padding: 0, flexShrink: 0 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(241,245,249,1)"; e.currentTarget.style.color = "#18212f"; }}
+                    onMouseLeave={(e) => { if (activeRouteMenuId !== r.id) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; } }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
                     </svg>
                   </button>
                 </div>
