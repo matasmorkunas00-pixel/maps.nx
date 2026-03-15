@@ -742,7 +742,7 @@ export default function App() {
 
   return (
     <>
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: "var(--app-height, 100dvh)", overflow: "hidden", background: "#000" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>
         <div ref={appleMapContainerRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, transition: "opacity 0.18s ease" }} />
         <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
       </div>

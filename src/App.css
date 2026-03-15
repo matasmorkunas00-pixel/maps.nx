@@ -3,10 +3,8 @@
   top: 0;
   left: 0;
   right: 0;
-  height: -webkit-fill-available;
-  height: var(--app-height, 100dvh);
+  bottom: 0;
   overflow: hidden;
-  background: #000;
 }
 
 .logo {
