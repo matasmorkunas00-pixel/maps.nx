@@ -747,16 +747,6 @@ export default function App() {
         <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
       </div>
 
-      {/* TEMP DEBUG — remove after testing */}
-      <div style={{ position: "fixed", top: 60, left: 10, zIndex: 99999, background: "rgba(0,0,0,0.82)", color: "#fff", fontSize: 11, padding: "8px 10px", borderRadius: 8, fontFamily: "monospace", pointerEvents: "none", lineHeight: 1.6 }}>
-        <div>innerHeight: {window.innerHeight}</div>
-        <div>screen.height: {screen.height}</div>
-        <div>outerHeight: {window.outerHeight}</div>
-        <div>root.h: {document.getElementById("root")?.offsetHeight}</div>
-        <div>SA-top: {getComputedStyle(document.documentElement).getPropertyValue("--sat") || "?"}</div>
-        <div>standalone: {String(window.navigator.standalone)}</div>
-      </div>
-
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
       {showRoutingUi && !isMobile && (
