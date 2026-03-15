@@ -742,7 +742,7 @@ export default function App() {
 
   return (
     <>
-      <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
         <div ref={appleMapContainerRef} style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, transition: "opacity 0.18s ease" }} />
         <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
       </div>
@@ -766,34 +766,16 @@ export default function App() {
         />
       )}
 
-      {/* Mobile route pill bar — Save + routing type */}
+      {/* Mobile route pill bar — routing type */}
       {showRoutingUi && isMobile && !(activeMenuPanel === "search" || activeMenuPanel === "library") && (
         <div style={{
-          position: "fixed",
+          position: "absolute",
           top: "calc(env(safe-area-inset-top, 0px) + 10px)",
-          left: "50%",
-          transform: "translateX(-50%)",
+          left: "calc(14px + env(safe-area-inset-left, 0px))",
           zIndex: 6,
-          display: "flex",
-          gap: 8,
           pointerEvents: "auto",
-          animation: "fade-drop-in 0.22s ease both",
+          animation: "panel-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both",
         }}>
-          <button
-            onClick={() => { setMobileSaveModalName(routeName || "My Route"); setMobileSaveModal({ step: "options" }); }}
-            style={{
-              background: "rgba(255,255,255,0.9)",
-              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-              border: "none", borderRadius: 20,
-              padding: "4px 14px",
-              fontSize: 11, fontWeight: 500, color: "#0f172a",
-              cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
-              letterSpacing: 0.1, lineHeight: 1, whiteSpace: "nowrap",
-              outline: "none", WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            Save
-          </button>
           <select
             value={routingMode}
             onChange={(e) => setRoutingMode(e.target.value)}
@@ -807,6 +789,7 @@ export default function App() {
               letterSpacing: 0.1, lineHeight: 1,
               outline: "none", WebkitTapHighlightColor: "transparent",
               appearance: "none", WebkitAppearance: "none",
+              textAlign: "center", textAlignLast: "center",
             }}
           >
             {Object.entries(ROUTING_MODES).map(([value, opt]) => (
@@ -818,6 +801,10 @@ export default function App() {
 
       <UndoButton
         onUndo={undoLast}
+        onClearAll={clearAll}
+        onSave={isMobile
+          ? () => { setMobileSaveModalName(routeName || "My Route"); setMobileSaveModal({ step: "options" }); }
+          : saveRoute}
         show={showRoutingUi && waypointsCount > 0 && !(isMobile && activeMenuPanel === "library")}
         elevationHidden={elevationHidden || !routeGeoJson}
         isMobile={isMobile}

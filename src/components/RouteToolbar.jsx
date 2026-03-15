@@ -229,17 +229,8 @@ export function RouteToolbar({
           ))}
         </div>
 
-        {/* Right: save + export stacked vertically */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button onClick={saveRoute} disabled={isRouting} title="Save route"
-            style={iconBtn(pressedButton === "save_icon")}
-            {...getPressHandlers("save_icon")}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M17 21V13H7V21" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 3V8H15V3" stroke="#24364b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+        {/* Right: export */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
           <button onClick={exportGPX} title="Export GPX"
             style={iconBtn(pressedButton === "export_icon")}
             {...getPressHandlers("export_icon")}>
