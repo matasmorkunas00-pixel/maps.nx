@@ -18,37 +18,42 @@ export function buildGpxFromRouteGeoJson(routeGeoJson, name = "Route") {
   return gpx;
 }
 
+function extractPoint(point) {
+  const lat = Number(point.getAttribute("lat"));
+  const lng = Number(point.getAttribute("lon"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const eleNode = point.querySelector("ele");
+  const ele = eleNode ? Number(eleNode.textContent) : undefined;
+  return typeof ele === "number" && Number.isFinite(ele) ? [lng, lat, ele] : [lng, lat];
+}
+
 export function parseGpxText(gpxText) {
+  // Strip UTF-8 BOM if present
+  const text = gpxText.charCodeAt(0) === 0xFEFF ? gpxText.slice(1) : gpxText;
+
+  // Strip XML namespaces so querySelector works regardless of namespace declarations
+  const stripped = text.replace(/<(\/?)[a-zA-Z][a-zA-Z0-9]*:/g, "<$1").replace(/\s+xmlns[^=]*="[^"]*"/g, "");
+
   const parser = new DOMParser();
-  const xml = parser.parseFromString(gpxText, "application/xml");
+  const xml = parser.parseFromString(stripped, "application/xml");
   if (xml.querySelector("parsererror")) return null;
 
   const featureCoords = [];
 
   Array.from(xml.querySelectorAll("trkseg")).forEach((segment) => {
-    const coords = Array.from(segment.querySelectorAll("trkpt"))
-      .map((point) => {
-        const lat = Number(point.getAttribute("lat"));
-        const lng = Number(point.getAttribute("lon"));
-        const eleNode = point.querySelector("ele");
-        const ele = eleNode ? Number(eleNode.textContent) : undefined;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return typeof ele === "number" && Number.isFinite(ele) ? [lng, lat, ele] : [lng, lat];
-      })
-      .filter(Boolean);
+    const coords = Array.from(segment.querySelectorAll("trkpt")).map(extractPoint).filter(Boolean);
     if (coords.length >= 2) featureCoords.push(coords);
   });
 
   if (!featureCoords.length) {
-    const routePoints = Array.from(xml.querySelectorAll("rtept"))
-      .map((point) => {
-        const lat = Number(point.getAttribute("lat"));
-        const lng = Number(point.getAttribute("lon"));
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return [lng, lat];
-      })
-      .filter(Boolean);
+    const routePoints = Array.from(xml.querySelectorAll("rtept")).map(extractPoint).filter(Boolean);
     if (routePoints.length >= 2) featureCoords.push(routePoints);
+  }
+
+  // Fallback: treat ordered waypoints as a single route
+  if (!featureCoords.length) {
+    const wptPoints = Array.from(xml.querySelectorAll("wpt")).map(extractPoint).filter(Boolean);
+    if (wptPoints.length >= 2) featureCoords.push(wptPoints);
   }
 
   if (!featureCoords.length) return null;
@@ -56,6 +61,8 @@ export function parseGpxText(gpxText) {
   const name =
     xml.querySelector("trk > name")?.textContent?.trim() ||
     xml.querySelector("rte > name")?.textContent?.trim() ||
+    xml.querySelector("metadata > name")?.textContent?.trim() ||
+    xml.querySelector("gpx > name")?.textContent?.trim() ||
     "Imported GPX";
 
   // Extract activity date: prefer metadata/time, fall back to first trkpt time

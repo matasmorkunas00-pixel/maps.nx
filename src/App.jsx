@@ -511,8 +511,8 @@ export default function App() {
             try {
               const text = await file.text();
               const parsed = parseGpxText(text);
-              return { file, parsed, folder: getFolderForParsed(parsed) };
-            } catch { return { file, parsed: null, folder: currentYear }; }
+              return { file, parsed, folder: getFolderForParsed(parsed), parseError: parsed ? null : "no track/route data found" };
+            } catch (err) { return { file, parsed: null, folder: currentYear, parseError: err?.message || "file read error" }; }
           }));
           fileMeta.push(...results);
         }
@@ -529,8 +529,8 @@ export default function App() {
         for (let i = 0; i < fileMeta.length; i += UPLOAD_BATCH_SIZE) {
           if (i > 0) await sleep(BATCH_DELAY_MS);
           const batch = fileMeta.slice(i, i + UPLOAD_BATCH_SIZE);
-          const results = await Promise.all(batch.map(async ({ file, parsed, folder }, batchIdx) => {
-            if (!parsed) { failCount++; return null; }
+          const results = await Promise.all(batch.map(async ({ file, parsed, folder, parseError }, batchIdx) => {
+            if (!parsed) { if (sampleErrors.length < 3) sampleErrors.push(`${file.name}: ${parseError || "invalid GPX"}`); failCount++; return null; }
             try {
               return await uploadWithRetry({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx, parsedData: parsed });
             } catch (err) {
