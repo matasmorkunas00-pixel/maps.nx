@@ -40,6 +40,17 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+@supports (padding: env(safe-area-inset-bottom)) {
+  html {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
