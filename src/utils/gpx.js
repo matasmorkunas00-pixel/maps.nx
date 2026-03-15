@@ -28,15 +28,10 @@ function extractPoint(point) {
 }
 
 export function parseGpxText(gpxText) {
-  // Strip UTF-8 BOM if present
-  const text = gpxText.charCodeAt(0) === 0xFEFF ? gpxText.slice(1) : gpxText;
-
-  // Strip XML namespaces so querySelector works regardless of namespace declarations
-  const stripped = text.replace(/<(\/?)[a-zA-Z][a-zA-Z0-9]*:/g, "<$1").replace(/\s+xmlns[^=]*="[^"]*"/g, "");
-
+  // Strip UTF-8 BOM if present, then parse as HTML to avoid XML namespace errors
+  const text = (gpxText.charCodeAt(0) === 0xFEFF ? gpxText.slice(1) : gpxText);
   const parser = new DOMParser();
-  const xml = parser.parseFromString(stripped, "application/xml");
-  if (xml.querySelector("parsererror")) return null;
+  const xml = parser.parseFromString(text, "text/html");
 
   const featureCoords = [];
 
