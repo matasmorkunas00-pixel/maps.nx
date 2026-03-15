@@ -563,8 +563,8 @@ export default function App() {
     }
 
     const parsed = [];
-    for (let i = 0; i < files.length; i += BATCH_SIZE) {
-      const batch = files.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < files.length; i += PARSE_BATCH_SIZE) {
+      const batch = files.slice(i, i + PARSE_BATCH_SIZE);
       const results = await Promise.all(batch.map(async (file, batchIdx) => {
         const text = await file.text();
         const p = parseGpxText(text);
