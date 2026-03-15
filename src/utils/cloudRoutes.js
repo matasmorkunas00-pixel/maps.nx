@@ -61,18 +61,26 @@ export async function listCloudImportedRoutes(userId) {
   const client = ensureSupabase();
   const { data: rows, error } = await client
     .from(GPX_ROUTES_TABLE)
-    .select("id, name, folder, file_name, storage_path, color, imported_at")
+    .select("id, name, folder, file_name, storage_path, color, imported_at, geo_json")
     .eq("user_id", userId)
     .order("imported_at", { ascending: false });
 
   if (error) throw error;
 
   const allRows = rows || [];
-  const DOWNLOAD_BATCH_SIZE = 8;
-  const importedRoutes = [];
+  // Fast path: rows with geo_json stored in DB need no storage download
+  const fastRows = allRows.filter((r) => r.geo_json);
+  const slowRows = allRows.filter((r) => !r.geo_json);
 
-  for (let i = 0; i < allRows.length; i += DOWNLOAD_BATCH_SIZE) {
-    const batch = allRows.slice(i, i + DOWNLOAD_BATCH_SIZE);
+  const fastRoutes = fastRows.map((row, i) =>
+    buildImportedRouteFromRow(row, row.geo_json, i)
+  );
+
+  // Slow path: legacy rows without geo_json must download from storage
+  const DOWNLOAD_BATCH_SIZE = 8;
+  const slowRoutes = [];
+  for (let i = 0; i < slowRows.length; i += DOWNLOAD_BATCH_SIZE) {
+    const batch = slowRows.slice(i, i + DOWNLOAD_BATCH_SIZE);
     const results = await Promise.all(
       batch.map(async (row, batchIdx) => {
         try {
@@ -86,17 +94,17 @@ export async function listCloudImportedRoutes(userId) {
           const parsed = parseGpxText(gpxText);
           if (!parsed) return null;
 
-          return buildImportedRouteFromRow(row, parsed.featureCollection, i + batchIdx);
+          return buildImportedRouteFromRow(row, parsed.featureCollection, fastRows.length + i + batchIdx);
         } catch (routeError) {
           console.error(`Failed to load GPX route ${row.id}:`, routeError);
           return null;
         }
       })
     );
-    importedRoutes.push(...results.filter(Boolean));
+    slowRoutes.push(...results.filter(Boolean));
   }
 
-  return importedRoutes;
+  return [...fastRoutes, ...slowRoutes];
 }
 
 export async function listCloudFolders(userId) {
@@ -140,10 +148,10 @@ export async function createCloudFolder({ userId, name, allowMissingTable = fals
   return folderName;
 }
 
-export async function uploadCloudImportedRoute({ userId, file, folder, color, index = 0 }) {
+export async function uploadCloudImportedRoute({ userId, file, folder, color, index = 0, parsedData = null }) {
   const client = ensureSupabase();
-  const gpxText = await file.text();
-  const parsed = parseGpxText(gpxText);
+  // Use pre-parsed data if provided (avoids re-reading the file a second time)
+  const parsed = parsedData || parseGpxText(await file.text());
   if (!parsed) throw new Error(`"${file.name}" is not a valid GPX file`);
 
   const routeId = createCloudRouteId();
@@ -172,6 +180,7 @@ export async function uploadCloudImportedRoute({ userId, file, folder, color, in
     storage_path: storagePath,
     color: color || getDefaultRouteColor(index),
     imported_at: new Date().toISOString(),
+    geo_json: parsed.featureCollection || null,
   };
 
   const { error: insertError } = await client.from(GPX_ROUTES_TABLE).insert(row);
