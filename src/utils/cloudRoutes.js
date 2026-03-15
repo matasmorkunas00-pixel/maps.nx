@@ -59,18 +59,40 @@ function buildImportedRouteFromRow(row, geoJson, index) {
 
 export async function listCloudImportedRoutes(userId) {
   const client = ensureSupabase();
-  const { data: rows, error } = await client
-    .from(GPX_ROUTES_TABLE)
-    .select("id, name, folder, file_name, storage_path, color, imported_at, geo_json")
-    .eq("user_id", userId)
-    .order("imported_at", { ascending: false });
 
-  if (error) throw error;
+  // Try with geo_json first; fall back to base columns if the column doesn't exist yet
+  let allRows = [];
+  let hasGeoJsonColumn = true;
+  {
+    const { data, error } = await client
+      .from(GPX_ROUTES_TABLE)
+      .select("id, name, folder, file_name, storage_path, color, imported_at, geo_json")
+      .eq("user_id", userId)
+      .order("imported_at", { ascending: false });
 
-  const allRows = rows || [];
+    if (error) {
+      const msg = String(error?.message || "").toLowerCase();
+      if (msg.includes("geo_json") || error?.code === "42703") {
+        // Column doesn't exist yet — retry without it
+        hasGeoJsonColumn = false;
+        const fallback = await client
+          .from(GPX_ROUTES_TABLE)
+          .select("id, name, folder, file_name, storage_path, color, imported_at")
+          .eq("user_id", userId)
+          .order("imported_at", { ascending: false });
+        if (fallback.error) throw fallback.error;
+        allRows = fallback.data || [];
+      } else {
+        throw error;
+      }
+    } else {
+      allRows = data || [];
+    }
+  }
+
   // Fast path: rows with geo_json stored in DB need no storage download
-  const fastRows = allRows.filter((r) => r.geo_json);
-  const slowRows = allRows.filter((r) => !r.geo_json);
+  const fastRows = hasGeoJsonColumn ? allRows.filter((r) => r.geo_json) : [];
+  const slowRows = hasGeoJsonColumn ? allRows.filter((r) => !r.geo_json) : allRows;
 
   const fastRoutes = fastRows.map((row, i) =>
     buildImportedRouteFromRow(row, row.geo_json, i)
@@ -183,7 +205,17 @@ export async function uploadCloudImportedRoute({ userId, file, folder, color, in
     geo_json: parsed.featureCollection || null,
   };
 
-  const { error: insertError } = await client.from(GPX_ROUTES_TABLE).insert(row);
+  let insertError;
+  ({ error: insertError } = await client.from(GPX_ROUTES_TABLE).insert(row));
+  if (insertError) {
+    const msg = String(insertError?.message || "").toLowerCase();
+    if (msg.includes("geo_json") || insertError?.code === "42703") {
+      // Column doesn't exist yet — insert without it
+      const { geo_json: _dropped, ...rowWithoutGeoJson } = row;
+      const retry = await client.from(GPX_ROUTES_TABLE).insert(rowWithoutGeoJson);
+      insertError = retry.error;
+    }
+  }
   if (insertError) {
     await client.storage.from(GPX_FILES_BUCKET).remove([storagePath]);
     throw insertError;
