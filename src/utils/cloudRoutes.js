@@ -67,28 +67,36 @@ export async function listCloudImportedRoutes(userId) {
 
   if (error) throw error;
 
-  const importedRoutes = await Promise.all(
-    (rows || []).map(async (row, index) => {
-      try {
-        const { data: blob, error: downloadError } = await client
-          .storage
-          .from(GPX_FILES_BUCKET)
-          .download(row.storage_path);
-        if (downloadError) throw downloadError;
+  const allRows = rows || [];
+  const DOWNLOAD_BATCH_SIZE = 8;
+  const importedRoutes = [];
 
-        const gpxText = await blob.text();
-        const parsed = parseGpxText(gpxText);
-        if (!parsed) return null;
+  for (let i = 0; i < allRows.length; i += DOWNLOAD_BATCH_SIZE) {
+    const batch = allRows.slice(i, i + DOWNLOAD_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (row, batchIdx) => {
+        try {
+          const { data: blob, error: downloadError } = await client
+            .storage
+            .from(GPX_FILES_BUCKET)
+            .download(row.storage_path);
+          if (downloadError) throw downloadError;
 
-        return buildImportedRouteFromRow(row, parsed.featureCollection, index);
-      } catch (routeError) {
-        console.error(`Failed to load GPX route ${row.id}:`, routeError);
-        return null;
-      }
-    })
-  );
+          const gpxText = await blob.text();
+          const parsed = parseGpxText(gpxText);
+          if (!parsed) return null;
 
-  return importedRoutes.filter(Boolean);
+          return buildImportedRouteFromRow(row, parsed.featureCollection, i + batchIdx);
+        } catch (routeError) {
+          console.error(`Failed to load GPX route ${row.id}:`, routeError);
+          return null;
+        }
+      })
+    );
+    importedRoutes.push(...results.filter(Boolean));
+  }
+
+  return importedRoutes;
 }
 
 export async function listCloudFolders(userId) {
