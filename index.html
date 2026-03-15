@@ -9,6 +9,17 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>gravel-planner</title>
+    <script>
+      // On iOS PWA, screen.height is the true physical screen height in CSS pixels.
+      // position:fixed;inset:0 resolves to innerHeight which excludes the status bar.
+      // Setting --app-height explicitly forces everything to cover the full screen.
+      function setAppHeight() {
+        var h = (window.screen && window.screen.height) ? window.screen.height : window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', h + 'px');
+      }
+      setAppHeight();
+      window.addEventListener('resize', setAppHeight);
+    </script>
   </head>
   <body>
     <div id="root"></div>
