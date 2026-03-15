@@ -1,3 +1,9 @@
+html {
+  background: red !important;
+}
+body {
+  background: blue !important;
+}
 #root {
   position: fixed;
   top: 0;
@@ -5,6 +11,7 @@
   right: 0;
   height: var(--app-height, 100vh);
   overflow: hidden;
+  background: green !important;
 }
 
 .logo {
