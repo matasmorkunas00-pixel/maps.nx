@@ -481,29 +481,53 @@ export default function App() {
     const BATCH_SIZE = 5;
 
     if (isCloudLibraryActive && supabaseUser) {
-      setIsCloudRoutesLoading(true); setCloudRoutesError(null);
+      setIsCloudRoutesLoading(true); setCloudRoutesError(null); setLibraryMessage(null); setLibraryError(null);
       try {
-        const createdFolders = new Set();
-        for (let i = 0; i < files.length; i += BATCH_SIZE) {
-          const batch = files.slice(i, i + BATCH_SIZE);
-          const uploaded = (await Promise.all(batch.map(async (file, batchIdx) => {
+        // First pass: parse all files to determine folders needed
+        const fileMeta = await Promise.all(files.map(async (file) => {
+          try {
+            const text = await file.text();
+            const parsed = parseGpxText(text);
+            return { file, parsed, folder: getFolderForParsed(parsed) };
+          } catch { return { file, parsed: null, folder: currentYear }; }
+        }));
+
+        // Pre-create all unique folders before any uploads to avoid race conditions
+        const foldersNeeded = [...new Set(fileMeta.map((m) => m.folder))];
+        await Promise.all(foldersNeeded.map((folder) =>
+          createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true }).catch(() => {})
+        ));
+
+        let successCount = 0;
+        let failCount = 0;
+        for (let i = 0; i < fileMeta.length; i += BATCH_SIZE) {
+          const batch = fileMeta.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(batch.map(async ({ file, parsed, folder }, batchIdx) => {
+            if (!parsed) { failCount++; return null; }
             try {
-              const text = await file.text();
-              const parsed = parseGpxText(text);
-              const folder = getFolderForParsed(parsed);
-              if (!createdFolders.has(folder)) {
-                await createCloudFolder({ userId: supabaseUser.id, name: folder, allowMissingTable: true });
-                createdFolders.add(folder);
-              }
-              return await uploadCloudImportedRoute({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx });
-            } catch { return null; }
-          }))).filter(Boolean);
+              const route = await uploadCloudImportedRoute({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx });
+              return route;
+            } catch (err) {
+              console.error(`Failed to upload ${file.name}:`, err);
+              failCount++;
+              return null;
+            }
+          }));
+          const uploaded = results.filter(Boolean);
+          successCount += uploaded.length;
           if (uploaded.length) {
             const folders = [...new Set(uploaded.map((r) => r.folder))];
             setCloudFolders((cur) => folders.reduce((acc, f) => appendFolderName(acc, f), cur));
             setCloudImportedRoutes((cur) => [...uploaded, ...cur]);
             folders.forEach((f) => { addFolderToVisibleList(f); });
           }
+          setLibraryMessage(`Uploaded ${successCount} / ${fileMeta.length}${failCount ? ` (${failCount} failed)` : ""}…`);
+        }
+        if (failCount > 0) {
+          setLibraryError(`${failCount} file(s) failed to upload. ${successCount} succeeded.`);
+          setLibraryMessage(null);
+        } else {
+          setLibraryMessage(`Uploaded ${successCount} file(s) successfully.`);
         }
       } catch (error) { setLibraryError(`Failed to upload GPX files: ${error?.message || "Unknown error"}`); }
       finally { setIsCloudRoutesLoading(false); event.target.value = ""; }
