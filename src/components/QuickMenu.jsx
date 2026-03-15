@@ -13,7 +13,7 @@ export function QuickMenu({
   quickMenuRef, isMobile,
   activeMenuPanel, toggleMenuPanel,
   speedMode, setSpeedMode,
-  isGraphExpanded, bottomSheetHeight,
+  isGraphExpanded, bottomSheetHeight, pendingPinSheetHeight, elevationHidden,
   // search
   searchQuery, setSearchQuery, searchResults, isSearchLoading, searchError,
   isSearchDropdownOpen, setIsSearchDropdownOpen,
@@ -35,6 +35,7 @@ export function QuickMenu({
   const mapStyleBtnRef = useRef(null);
   const [popupEl, setPopupEl] = useState(null);
   const [popupPos, setPopupPos] = useState({ top: -9999, left: -9999, visible: false });
+  const [menuHeight, setMenuHeight] = useState(0);
 
   // After the popup mounts and after the button is known, measure both and compute exact position
   useLayoutEffect(() => {
@@ -51,9 +52,24 @@ export function QuickMenu({
     });
   }, [isStyleMenuOpen, popupEl]);
 
-  const topPos = !isMobile && isGraphExpanded
-    ? `calc((100dvh - ${bottomSheetHeight}) / 2)`
-    : "50%";
+  // Measure menu height so we can anchor its bottom edge just above the sheet
+  useLayoutEffect(() => {
+    if (quickMenuRef?.current) setMenuHeight(quickMenuRef.current.offsetHeight);
+  }, [quickMenuRef, pendingPinSheetHeight, elevationHidden]);
+
+  let topPos;
+  if (isMobile && pendingPinSheetHeight > 0 && menuHeight > 0) {
+    topPos = `calc(100dvh - ${pendingPinSheetHeight}px - 10px - ${menuHeight / 2}px)`;
+  } else if (isMobile && !elevationHidden && menuHeight > 0) {
+    // Align last icon (my location) top edge with the undo button top (calc(50% + 113px))
+    // last icon top = topPos + menuHeight/2 - MENU_ICON_SIZE = 50% + 113px
+    // → topPos = 50% + 113px + MENU_ICON_SIZE - menuHeight/2 = 50% + (157 - menuHeight/2)px
+    topPos = `calc(50% + ${157 - menuHeight / 2}px)`;
+  } else if (!isMobile && isGraphExpanded) {
+    topPos = `calc((100dvh - ${bottomSheetHeight}) / 2)`;
+  } else {
+    topPos = "50%";
+  }
 
   const circleBtn = (flash) => ({
     width: MENU_ICON_SIZE,
@@ -162,16 +178,18 @@ export function QuickMenu({
         )}
       </div>
 
-      {/* Route tools */}
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}>
-        <button onClick={() => toggleMenuPanel("route")} style={getMenuIconButtonStyle("route")} aria-label="Route tools">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="6" cy="18" r="2.2" fill="#24364b" />
-            <circle cx="18" cy="6" r="2.2" fill="#24364b" />
-            <path d="M8.2 17.1C12.8 16 10.3 8.9 15.8 7.2" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
+      {/* Route tools — desktop only */}
+      {!isMobile && (
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={() => toggleMenuPanel("route")} style={getMenuIconButtonStyle("route")} aria-label="Route tools">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="6" cy="18" r="2.2" fill="#24364b" />
+              <circle cx="18" cy="6" r="2.2" fill="#24364b" />
+              <path d="M8.2 17.1C12.8 16 10.3 8.9 15.8 7.2" stroke="#24364b" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Speed mode */}
       <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, height: MENU_ICON_SIZE }}>

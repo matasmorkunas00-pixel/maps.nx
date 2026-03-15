@@ -42,6 +42,7 @@ export function PendingPinDialog({
   isMobile,
   getButtonStyle,
   getCurrentLocation,
+  onHeightChange,
 }) {
   const [elevation, setElevation] = useState(null);
   const [userLoc, setUserLoc] = useState(null);
@@ -70,6 +71,15 @@ export function PendingPinDialog({
 
     return () => { setElevation(null); setUserLoc(null); };
   }, [pendingPin, getCurrentLocation]);
+
+  useEffect(() => {
+    if (!isMobile || !onHeightChange) return;
+    if (!pendingPin) { onHeightChange(0); return; }
+    const id = requestAnimationFrame(() => {
+      if (sheetRef.current) onHeightChange(sheetRef.current.offsetHeight);
+    });
+    return () => { cancelAnimationFrame(id); onHeightChange(0); };
+  }, [pendingPin, isMobile, onHeightChange]);
 
   // Swipe-to-dismiss refs
   const dragY = useRef(0);
@@ -166,7 +176,7 @@ export function PendingPinDialog({
             "0 -8px 32px rgba(15, 23, 42, 0.18), 0 -2px 8px rgba(15, 23, 42, 0.08)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",
-          animation: "slide-up-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both",
+          animation: "slide-up-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both",
           paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
           touchAction: "none",
           overflow: "hidden",

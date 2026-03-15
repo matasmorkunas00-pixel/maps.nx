@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, resolveRoutingMode } from "./constants";
+import { STORAGE_KEY, GPX_LIBRARY_STORAGE_KEY, resolveRoutingMode, ROUTING_MODES } from "./constants";
 import { uid } from "./utils/geo";
 import { buildGpxFromRouteGeoJson, parseGpxText } from "./utils/gpx";
 import { normalizeImportedRoute, normalizeSavedRoute, buildImportedRoutesGeoJson, getDefaultRouteColor } from "./utils/routes";
@@ -54,6 +54,7 @@ export default function App() {
   const [searchError, setSearchError] = useState(null);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [pendingPin, setPendingPin] = useState(null);
+  const [pendingPinSheetHeight, setPendingPinSheetHeight] = useState(0);
   const [isGraphExpanded, setIsGraphExpanded] = useState(false);
   const [showCyclingOverlay, setShowCyclingOverlay] = useState(false);
   const [elevationHidden, setElevationHidden] = useState(false);
@@ -62,6 +63,8 @@ export default function App() {
   const [routeContextMenu, setRouteContextMenu] = useState(null); // { id, top, right }
   const [pendingOverwriteEntry, setPendingOverwriteEntry] = useState(null);
   const [pendingDeleteRouteId, setPendingDeleteRouteId] = useState(null);
+  const [mobileSaveModal, setMobileSaveModal] = useState(null); // null | { step: "options" } | { step: "name", withExport: boolean }
+  const [mobileSaveModalName, setMobileSaveModalName] = useState("");
 
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
@@ -696,6 +699,7 @@ export default function App() {
       } else if (activeMenuPanel) {
         closeMobilePanel(activeMenuPanel);
       }
+      if (opening && pendingPin) handleLocationCancel();
     }
     setActiveMenuPanel(opening ? panelKey : null);
     setIsStyleMenuOpen(false);
@@ -745,11 +749,11 @@ export default function App() {
 
       <input ref={gpxFileInputRef} type="file" accept=".gpx" multiple onChange={handleGpxUpload} style={{ display: "none" }} />
 
-      {showRoutingUi && !(isMobile && (activeMenuPanel === "search" || activeMenuPanel === "library")) && (
+      {showRoutingUi && !isMobile && (
         <RouteToolbar
           undoLast={undoLast} clearAll={handleClearAll}
           distanceKm={distanceKm} elevationGainM={elevationGainM}
-          isMobile={isMobile} isRouting={isRouting} routingError={routingError}
+          isMobile={false} isRouting={isRouting} routingError={routingError}
           saveRoute={saveRoute} exportGPX={exportGPX}
           routeName={routeName} setRouteName={setRouteName}
           newRoute={newRoute}
@@ -758,8 +762,58 @@ export default function App() {
           pressedButton={pressedButton}
           waypointsCount={waypointsCount}
           bottomSheetHeight={bottomSheetHeight}
-          mobileVisible={!isMobile || activeMenuPanel === "route"}
+          mobileVisible={false}
         />
+      )}
+
+      {/* Mobile route pill bar — Save + routing type */}
+      {showRoutingUi && isMobile && !(activeMenuPanel === "search" || activeMenuPanel === "library") && (
+        <div style={{
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 6,
+          display: "flex",
+          gap: 8,
+          pointerEvents: "auto",
+          animation: "fade-drop-in 0.22s ease both",
+        }}>
+          <button
+            onClick={() => { setMobileSaveModalName(routeName || "My Route"); setMobileSaveModal({ step: "options" }); }}
+            style={{
+              background: "rgba(255,255,255,0.9)",
+              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+              border: "none", borderRadius: 20,
+              padding: "4px 14px",
+              fontSize: 11, fontWeight: 500, color: "#0f172a",
+              cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
+              letterSpacing: 0.1, lineHeight: 1, whiteSpace: "nowrap",
+              outline: "none", WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            Save
+          </button>
+          <select
+            value={routingMode}
+            onChange={(e) => setRoutingMode(e.target.value)}
+            style={{
+              background: "rgba(255,255,255,0.9)",
+              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+              border: "none", borderRadius: 20,
+              padding: "4px 14px",
+              fontSize: 11, fontWeight: 500, color: "#0f172a",
+              cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
+              letterSpacing: 0.1, lineHeight: 1,
+              outline: "none", WebkitTapHighlightColor: "transparent",
+              appearance: "none", WebkitAppearance: "none",
+            }}
+          >
+            {Object.entries(ROUTING_MODES).map(([value, opt]) => (
+              <option key={value} value={value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
       )}
 
       <UndoButton
@@ -793,8 +847,9 @@ export default function App() {
         quickMenuRef={quickMenuRef} isMobile={isMobile}
         activeMenuPanel={activeMenuPanel} toggleMenuPanel={toggleMenuPanel}
         isGraphExpanded={isGraphExpanded} bottomSheetHeight={bottomSheetHeight}
+        pendingPinSheetHeight={pendingPinSheetHeight}
         showRoutingUi={showRoutingUi} waypointsCount={waypointsCount}
-        elevationHidden={elevationHidden}
+        elevationHidden={elevationHidden || !routeGeoJson}
         speedMode={speedMode} setSpeedMode={setSpeedMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         searchResults={searchResults} isSearchLoading={isSearchLoading} searchError={searchError}
@@ -883,6 +938,7 @@ export default function App() {
         handleLocationCancel={handleLocationCancel}
         isMobile={isMobile} getButtonStyle={getButtonStyle}
         getCurrentLocation={getCurrentLocation}
+        onHeightChange={setPendingPinSheetHeight}
       />
 
       {mapStyle === "outdoor" && (
@@ -994,6 +1050,89 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── Mobile save modal ── */}
+      {mobileSaveModal && (() => {
+        const overlayStyle = { position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" };
+        const sheetStyle = { background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))", width: "100%", maxWidth: 480, boxShadow: "0 -8px 32px rgba(15,23,42,0.18)", animation: "slide-up-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both" };
+        const optBtnStyle = { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 16px", borderRadius: 12, border: "1px solid rgba(226,232,240,0.9)", background: "#f8fafc", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#18212f", textAlign: "left", transition: "background 0.12s", outline: "none", WebkitTapHighlightColor: "transparent" };
+        const cancelBtnStyle = { width: "100%", marginTop: 10, padding: "12px 0", borderRadius: 12, border: "none", background: "transparent", fontSize: 14, fontWeight: 500, color: "#64748b", cursor: "pointer", outline: "none", WebkitTapHighlightColor: "transparent" };
+
+        if (mobileSaveModal.step === "options") {
+          return (
+            <div style={overlayStyle} onClick={() => setMobileSaveModal(null)}>
+              <div style={sheetStyle} onClick={(e) => e.stopPropagation()}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(15,23,42,0.18)", margin: "0 auto 16px" }} />
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#18212f", marginBottom: 12 }}>Save route</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button style={optBtnStyle} onClick={() => setMobileSaveModal({ step: "name", withExport: false })}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M17 21V13H7V21" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M7 3V8H15V3" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <span>Save to library</span>
+                  </button>
+                  <button style={optBtnStyle} onClick={() => setMobileSaveModal({ step: "name", withExport: true })}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><polyline points="7 10 12 15 17 10" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <span>Save to library and export GPX</span>
+                  </button>
+                </div>
+                <button style={cancelBtnStyle} onClick={() => setMobileSaveModal(null)}>Cancel</button>
+              </div>
+            </div>
+          );
+        }
+
+        if (mobileSaveModal.step === "name") {
+          const confirm = async () => {
+            const name = mobileSaveModalName.trim() || "My Route";
+            setRouteName(name);
+            setMobileSaveModal(null);
+            if (routeDataRef.current && waypointsRef.current.length >= 2) {
+              const entry = { id: activeRouteId || uid(), name, createdAt: new Date().toISOString(), routingMode, waypoints: waypointsRef.current, routeGeoJson: routeDataRef.current, distanceKm, elevationGainM, elevationLossM };
+              doSaveRoute(entry);
+              if (mobileSaveModal.withExport) {
+                const gpx = buildGpxFromRouteGeoJson(routeDataRef.current, name);
+                if (gpx) {
+                  const fileName = `${name.replace(/[^a-zA-Z0-9_.-]/g, "_")}.gpx`;
+                  const file = new File([gpx], fileName, { type: "application/gpx+xml" });
+                  if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+                    try { await navigator.share({ title: name, files: [file] }); }
+                    catch (err) {
+                      if (err?.name !== "AbortError") {
+                        const url = URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }));
+                        const a = document.createElement("a"); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+                      }
+                    }
+                  } else {
+                    const url = URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }));
+                    const a = document.createElement("a"); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+                  }
+                }
+              }
+            }
+          };
+          return (
+            <div style={overlayStyle} onClick={() => setMobileSaveModal(null)}>
+              <div style={sheetStyle} onClick={(e) => e.stopPropagation()}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(15,23,42,0.18)", margin: "0 auto 16px" }} />
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#18212f", marginBottom: 4 }}>Name your ride</div>
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>{mobileSaveModal.withExport ? "Save to library and export GPX" : "Save to library"}</div>
+                <input
+                  autoFocus
+                  value={mobileSaveModalName}
+                  onChange={(e) => setMobileSaveModalName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && confirm()}
+                  placeholder="Route name"
+                  style={{ width: "100%", boxSizing: "border-box", height: 44, padding: "0 14px", borderRadius: 12, border: "1px solid rgba(226,232,240,0.9)", background: "#f8fafc", fontSize: 15, color: "#0f172a", outline: "none", WebkitTapHighlightColor: "transparent" }}
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                  <button onClick={() => setMobileSaveModal({ step: "options" })} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1px solid rgba(226,232,240,0.9)", background: "#fff", fontSize: 14, fontWeight: 600, color: "#64748b", cursor: "pointer", outline: "none", WebkitTapHighlightColor: "transparent" }}>Back</button>
+                  <button onClick={confirm} style={{ flex: 2, padding: "12px 0", borderRadius: 12, border: "none", background: "#2563eb", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", outline: "none", WebkitTapHighlightColor: "transparent" }}>{mobileSaveModal.withExport ? "Save & Export" : "Save"}</button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* ── Delete confirmation dialog ── */}
       {pendingDeleteRouteId && (() => {
