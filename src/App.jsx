@@ -478,19 +478,44 @@ export default function App() {
       return currentYear;
     };
 
-    const BATCH_SIZE = 5;
+    const UPLOAD_BATCH_SIZE = 3;
+    const PARSE_BATCH_SIZE = 10;
+    const BATCH_DELAY_MS = 400;
+
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+    const uploadWithRetry = async (params, maxAttempts = 3) => {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          return await uploadCloudImportedRoute(params);
+        } catch (err) {
+          const msg = String(err?.message || err?.statusCode || "").toLowerCase();
+          const isRateLimit = err?.statusCode === 429 || msg.includes("429") || msg.includes("rate") || msg.includes("too many");
+          if (isRateLimit && attempt < maxAttempts - 1) {
+            await sleep(1500 * Math.pow(2, attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+    };
 
     if (isCloudLibraryActive && supabaseUser) {
       setIsCloudRoutesLoading(true); setCloudRoutesError(null); setLibraryMessage(null); setLibraryError(null);
       try {
-        // First pass: parse all files to determine folders needed
-        const fileMeta = await Promise.all(files.map(async (file) => {
-          try {
-            const text = await file.text();
-            const parsed = parseGpxText(text);
-            return { file, parsed, folder: getFolderForParsed(parsed) };
-          } catch { return { file, parsed: null, folder: currentYear }; }
-        }));
+        // First pass: parse files in small batches (not all at once) to determine folders needed
+        const fileMeta = [];
+        for (let i = 0; i < files.length; i += PARSE_BATCH_SIZE) {
+          const batch = files.slice(i, i + PARSE_BATCH_SIZE);
+          const results = await Promise.all(batch.map(async (file) => {
+            try {
+              const text = await file.text();
+              const parsed = parseGpxText(text);
+              return { file, parsed, folder: getFolderForParsed(parsed) };
+            } catch { return { file, parsed: null, folder: currentYear }; }
+          }));
+          fileMeta.push(...results);
+        }
 
         // Pre-create all unique folders before any uploads to avoid race conditions
         const foldersNeeded = [...new Set(fileMeta.map((m) => m.folder))];
@@ -500,15 +525,17 @@ export default function App() {
 
         let successCount = 0;
         let failCount = 0;
-        for (let i = 0; i < fileMeta.length; i += BATCH_SIZE) {
-          const batch = fileMeta.slice(i, i + BATCH_SIZE);
+        const sampleErrors = [];
+        for (let i = 0; i < fileMeta.length; i += UPLOAD_BATCH_SIZE) {
+          if (i > 0) await sleep(BATCH_DELAY_MS);
+          const batch = fileMeta.slice(i, i + UPLOAD_BATCH_SIZE);
           const results = await Promise.all(batch.map(async ({ file, parsed, folder }, batchIdx) => {
             if (!parsed) { failCount++; return null; }
             try {
-              const route = await uploadCloudImportedRoute({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx });
-              return route;
+              return await uploadWithRetry({ userId: supabaseUser.id, file, folder, color: getDefaultRouteColor(i + batchIdx), index: i + batchIdx, parsedData: parsed });
             } catch (err) {
               console.error(`Failed to upload ${file.name}:`, err);
+              if (sampleErrors.length < 3) sampleErrors.push(err?.message || String(err));
               failCount++;
               return null;
             }
@@ -524,7 +551,8 @@ export default function App() {
           setLibraryMessage(`Uploaded ${successCount} / ${fileMeta.length}${failCount ? ` (${failCount} failed)` : ""}…`);
         }
         if (failCount > 0) {
-          setLibraryError(`${failCount} file(s) failed to upload. ${successCount} succeeded.`);
+          const errDetail = sampleErrors.length ? ` Error: ${sampleErrors[0]}` : "";
+          setLibraryError(`${failCount} file(s) failed to upload. ${successCount} succeeded.${errDetail}`);
           setLibraryMessage(null);
         } else {
           setLibraryMessage(`Uploaded ${successCount} file(s) successfully.`);

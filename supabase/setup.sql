@@ -45,8 +45,18 @@ create table if not exists public.gpx_routes (
   file_name text not null,
   storage_path text not null unique,
   color text not null default '#2563eb',
-  imported_at timestamptz not null default timezone('utc', now())
+  imported_at timestamptz not null default timezone('utc', now()),
+  geo_json jsonb,
+  distance_km text,
+  elevation_gain_m text,
+  elevation_loss_m text
 );
+
+-- Migration: add columns to existing tables (safe to run multiple times)
+alter table public.gpx_routes add column if not exists geo_json jsonb;
+alter table public.gpx_routes add column if not exists distance_km text;
+alter table public.gpx_routes add column if not exists elevation_gain_m text;
+alter table public.gpx_routes add column if not exists elevation_loss_m text;
 
 create table if not exists public.gpx_folders (
   id uuid primary key default gen_random_uuid(),
