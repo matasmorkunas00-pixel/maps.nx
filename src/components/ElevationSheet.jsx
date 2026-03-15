@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { ElevationChart } from "./ElevationChart";
+
+const MINIMIZED_HEIGHT = "30px";
 
 export function ElevationSheet({
   routeGeoJson, elevationGainM, elevationLossM, distanceKm,
@@ -12,10 +15,79 @@ export function ElevationSheet({
     boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
   };
 
-  // cycling button: 12px font + 7+7 padding + 2px border = 28px, gap 10px → 38px offset
+  const [btnPressed, setBtnPressed] = useState(false);
+
+  const btnStyle = {
+    background: btnPressed ? "rgba(220,220,220,0.95)" : "rgba(255,255,255,0.9)",
+    border: "none",
+    borderRadius: 20,
+    padding: "4px 10px",
+    fontSize: 11,
+    fontWeight: 500,
+    color: "#0f172a",
+    cursor: "pointer",
+    boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
+    letterSpacing: 0.1,
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    outline: "none",
+    WebkitTapHighlightColor: "transparent",
+    transition: "background 0.15s ease",
+  };
+
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+          left: 12,
+          right: 12,
+          height: hidden ? MINIMIZED_HEIGHT : "clamp(171px, 19vh, 225px)",
+          ...panelBg,
+          borderRadius: 14,
+          boxSizing: "border-box",
+          pointerEvents: "auto",
+          zIndex: 4,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          transition: "height 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          animation: "slide-up-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both",
+        }}
+      >
+        {/* Header: stats left, button right */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px", height: 30, flexShrink: 0, pointerEvents: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>{distanceKm} km</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↑ {elevationGainM} m</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↓ {elevationLossM} m</span>
+          </div>
+          <button
+            onClick={() => setHidden(!hidden)}
+            onMouseDown={() => setBtnPressed(true)}
+            onMouseUp={(e) => { setBtnPressed(false); e.currentTarget.blur(); }}
+            onMouseLeave={() => setBtnPressed(false)}
+            onTouchStart={() => setBtnPressed(true)}
+            onTouchEnd={(e) => { setBtnPressed(false); e.currentTarget.blur(); }}
+            style={btnStyle}
+          >
+            {hidden ? "Show elevation" : "Hide"}
+          </button>
+        </div>
+
+        {/* Chart fills remaining space */}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <ElevationChart routeGeoJson={routeGeoJson} onHoverCoordinateChange={onHoverCoordinateChange} />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: keep original behaviour
   const hiddenBottom = hasCyclingButton
     ? "calc(10px + env(safe-area-inset-bottom, 0px) + 38px)"
-    : isMobile ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 20;
+    : 20;
 
   const pillStyle = {
     background: "rgba(255,255,255,0.72)",
@@ -42,8 +114,7 @@ export function ElevationSheet({
           ...pillStyle,
           position: "absolute",
           bottom: hiddenBottom,
-          right: isMobile ? "50%" : 20,
-          transform: isMobile ? "translateX(50%)" : "none",
+          right: 20,
           zIndex: 4,
         }}
       >
@@ -56,10 +127,10 @@ export function ElevationSheet({
     <div
       style={{
         position: "absolute",
-        bottom: isMobile ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 20,
-        left: isMobile ? 12 : 120,
-        right: isMobile ? 12 : 20,
-        height: isMobile ? "clamp(171px, 19vh, 225px)" : "clamp(200px, 22vh, 260px)",
+        bottom: 20,
+        left: "calc(14px + env(safe-area-inset-left, 0px))",
+        right: 20,
+        height: "clamp(200px, 22vh, 260px)",
         ...panelBg,
         borderRadius: 14,
         boxSizing: "border-box",
@@ -76,25 +147,7 @@ export function ElevationSheet({
         <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>{distanceKm} km</span>
         <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↑ {elevationGainM} m</span>
         <span style={{ fontSize: 11, fontWeight: 500, color: "#64748b", letterSpacing: 0.2 }}>↓ {elevationLossM} m</span>
-        <button
-          onClick={() => setHidden(true)}
-          style={{
-            background: "rgba(255,255,255,0.9)",
-            border: "none",
-            borderRadius: 20,
-            padding: "4px 10px",
-            fontSize: 11,
-            fontWeight: 500,
-            color: "#0f172a",
-            cursor: "pointer",
-            boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
-            letterSpacing: 0.1,
-            lineHeight: 1,
-            whiteSpace: "nowrap",
-          }}
-        >
-          Hide
-        </button>
+        <button onClick={() => setHidden(true)} style={btnStyle}>Hide</button>
       </div>
 
       {/* Chart fills remaining space */}

@@ -16,8 +16,9 @@ export function UndoButton({ onUndo, show, elevationHidden, isMobile, hasCycling
   // "Hidden" position: near bottom-right, above the "Show elevation" pill on desktop
   let topHidden;
   if (isMobile) {
-    // Equivalent to bottom: 14px + safe-area-inset-bottom
-    topHidden = `calc(100% - 14px - env(safe-area-inset-bottom, 0px) - ${MENU_ICON_SIZE}px)`;
+    // Above the minimized elevation bar: bar is 30px tall at bottom:10px+safe-area
+    // → bar top edge at 40px+safe-area from bottom → button bottom edge at 50px+safe-area
+    topHidden = `calc(100% - 50px - env(safe-area-inset-bottom, 0px) - ${MENU_ICON_SIZE}px)`;
   } else {
     // Above the "Show elevation" pill on desktop
     const pillBottom = hasCyclingButton ? 48 : 20;
